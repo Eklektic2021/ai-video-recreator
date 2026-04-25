@@ -2,7 +2,10 @@ import { useState, useRef, useCallback } from 'react';
 import ApiKeySetup from './components/ApiKeySetup';
 import AuthGuard from './components/AuthGuard';
 import PlatformSelector from './components/PlatformSelector';
+import ProjectsPanel from './components/ProjectsPanel';
 import ResultsTabs from './components/ResultsTabs';
+import { saveProject } from './hooks/useProjects';
+import { auth } from './lib/firebase';
 import { getStoredApiKey, clearApiKey, runAnalysis } from './lib/anthropic';
 import { AnalysisResult, SelectedPlatforms } from './types';
 
@@ -15,6 +18,7 @@ const DEFAULT_PLATFORMS: SelectedPlatforms = {
 export default function App() {
   const [apiKey, setApiKey] = useState<string>(getStoredApiKey);
   const [showKeySetup, setShowKeySetup] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState<SelectedPlatforms>(DEFAULT_PLATFORMS);
@@ -76,6 +80,12 @@ export default function App() {
     try {
       const data = await runAnalysis(apiKey, description, platforms);
       setResult(data);
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        saveProject(uid, { title: description, platforms, output: data }).catch(
+          (e) => console.warn('Failed to save project:', e)
+        );
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {
@@ -99,6 +109,14 @@ export default function App() {
 
   return (
     <AuthGuard>
+    <ProjectsPanel
+      open={showProjects}
+      onClose={() => setShowProjects(false)}
+      onLoad={(output, plats) => {
+        setResult(output);
+        setPlatforms(plats);
+      }}
+    />
     <div className="app">
       {loading && (
         <div className="loading-overlay">
@@ -120,6 +138,12 @@ export default function App() {
             <p className="header-tagline">
               Analyze any video and generate ready-to-use prompts for every platform
             </p>
+            <button
+              className="projects-open-btn"
+              onClick={() => setShowProjects(true)}
+            >
+              &#128193; My Projects
+            </button>
             <button
               className="apikey-change-btn"
               onClick={() => setShowKeySetup(true)}
