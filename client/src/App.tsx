@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback } from 'react';
+import ApiKeySetup from './components/ApiKeySetup';
 import PlatformSelector from './components/PlatformSelector';
 import ResultsTabs from './components/ResultsTabs';
+import { getStoredApiKey, clearApiKey, runAnalysis } from './lib/anthropic';
 import { AnalysisResult, SelectedPlatforms } from './types';
 
 const DEFAULT_PLATFORMS: SelectedPlatforms = {
@@ -10,6 +12,8 @@ const DEFAULT_PLATFORMS: SelectedPlatforms = {
 };
 
 export default function App() {
+  const [apiKey, setApiKey] = useState<string>(getStoredApiKey);
+  const [showKeySetup, setShowKeySetup] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [platforms, setPlatforms] = useState<SelectedPlatforms>(DEFAULT_PLATFORMS);
@@ -41,13 +45,12 @@ export default function App() {
   );
 
   const canAnalyze =
-    videoFile &&
+    !!apiKey &&
+    !!videoFile &&
     description.trim().length > 0 &&
-    (platforms.video.length > 0 ||
-      platforms.music.length > 0 ||
-      platforms.editing.length > 0);
+    (platforms.video.length > 0 || platforms.music.length > 0 || platforms.editing.length > 0);
 
-  const messages = [
+  const rotatingMessages = [
     'Analyzing your video...',
     'Identifying scenes and camera work...',
     'Generating platform prompts...',
@@ -63,29 +66,14 @@ export default function App() {
     setResult(null);
 
     let msgIdx = 0;
-    setLoadingMessage(messages[msgIdx]);
+    setLoadingMessage(rotatingMessages[msgIdx]);
     const msgInterval = setInterval(() => {
-      msgIdx = (msgIdx + 1) % messages.length;
-      setLoadingMessage(messages[msgIdx]);
+      msgIdx = (msgIdx + 1) % rotatingMessages.length;
+      setLoadingMessage(rotatingMessages[msgIdx]);
     }, 3000);
 
     try {
-      const formData = new FormData();
-      formData.append('video', videoFile!);
-      formData.append('description', description);
-      formData.append('platforms', JSON.stringify(platforms));
-
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Server error' }));
-        throw new Error(data.error ?? `Server error ${res.status}`);
-      }
-
-      const data: AnalysisResult = await res.json();
+      const data = await runAnalysis(apiKey, description, platforms);
       setResult(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
@@ -94,6 +82,17 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  if (!apiKey || showKeySetup) {
+    return (
+      <ApiKeySetup
+        onSave={(key) => {
+          setApiKey(key);
+          setShowKeySetup(false);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="app">
@@ -113,9 +112,18 @@ export default function App() {
             <span className="header-sep">|</span>
             <span className="header-title">AI Video Recreator</span>
           </div>
-          <p className="header-tagline">
-            Analyze any video and generate ready-to-use prompts for every platform
-          </p>
+          <div className="header-right">
+            <p className="header-tagline">
+              Analyze any video and generate ready-to-use prompts for every platform
+            </p>
+            <button
+              className="apikey-change-btn"
+              onClick={() => setShowKeySetup(true)}
+              title="Change API key"
+            >
+              &#9881; API Key
+            </button>
+          </div>
         </div>
       </header>
 
@@ -126,10 +134,7 @@ export default function App() {
           <div
             className={`upload-zone ${dragOver ? 'upload-zone--dragover' : ''} ${videoFile ? 'upload-zone--filled' : ''}`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
           >
@@ -232,6 +237,13 @@ export default function App() {
           <span className="footer-brand">Claude AI</span>
           {' · '}
           <span className="footer-suite">MAISuite Flow</span>
+          {' · '}
+          <button
+            className="footer-clear-key"
+            onClick={() => { clearApiKey(); setApiKey(''); }}
+          >
+            Clear API Key
+          </button>
         </p>
       </footer>
     </div>
