@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Bash(rm -rf server/_core server/routers drizzle patches shared client/src/_core client/src/contexts client/src/hooks client/src/lib client/src/pages client/src/components)",
+      "Bash(rm -f server/db.ts server/storage.ts server/auth.logout.test.ts server/projects.test.ts server/coverArtGenerator.ts server/masterGuideGenerator.ts server/promptGenerator.ts server/routers.ts drizzle.config.ts vitest.config.ts components.json vite.config.ts.bak .webdev/.gitkeep)",
+      "Bash(pnpm install *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(npm *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" --version)"
+    ]
+  }
+}

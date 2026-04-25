@@ -1,42 +1,239 @@
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
-import SharePage from "@/pages/SharePage";
-import ProfilePage from "@/pages/ProfilePage";
-import TemplatesPage from "@/pages/TemplatesPage";
-import { Route, Switch } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import { useState, useRef, useCallback } from 'react';
+import PlatformSelector from './components/PlatformSelector';
+import ResultsTabs from './components/ResultsTabs';
+import { AnalysisResult, SelectedPlatforms } from './types';
 
-function Router() {
+const DEFAULT_PLATFORMS: SelectedPlatforms = {
+  video: ['Runway ML', 'Kling AI'],
+  music: ['Suno'],
+  editing: ['CapCut'],
+};
+
+export default function App() {
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [description, setDescription] = useState('');
+  const [platforms, setPlatforms] = useState<SelectedPlatforms>(DEFAULT_PLATFORMS);
+  const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Analyzing your video...');
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = useCallback((file: File) => {
+    if (!file.type.startsWith('video/')) {
+      setError('Please upload a video file.');
+      return;
+    }
+    setVideoFile(file);
+    setError(null);
+    setResult(null);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    },
+    [handleFile]
+  );
+
+  const canAnalyze =
+    videoFile &&
+    description.trim().length > 0 &&
+    (platforms.video.length > 0 ||
+      platforms.music.length > 0 ||
+      platforms.editing.length > 0);
+
+  const messages = [
+    'Analyzing your video...',
+    'Identifying scenes and camera work...',
+    'Generating platform prompts...',
+    'Crafting music recommendations...',
+    'Building editing guide...',
+    'Finalizing SFX breakdown...',
+  ];
+
+  const handleAnalyze = async () => {
+    if (!canAnalyze) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    let msgIdx = 0;
+    setLoadingMessage(messages[msgIdx]);
+    const msgInterval = setInterval(() => {
+      msgIdx = (msgIdx + 1) % messages.length;
+      setLoadingMessage(messages[msgIdx]);
+    }, 3000);
+
+    try {
+      const formData = new FormData();
+      formData.append('video', videoFile!);
+      formData.append('description', description);
+      formData.append('platforms', JSON.stringify(platforms));
+
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Server error' }));
+        throw new Error(data.error ?? `Server error ${res.status}`);
+      }
+
+      const data: AnalysisResult = await res.json();
+      setResult(data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+    } finally {
+      clearInterval(msgInterval);
+      setLoading(false);
+    }
+  };
+
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/profile/:userId"} component={ProfilePage} />
-      <Route path={"/templates"} component={TemplatesPage} />
-      <Route path={"/share/:shareToken"} component={SharePage} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <div className="app">
+      {loading && (
+        <div className="loading-overlay">
+          <div className="loading-card">
+            <div className="spinner" />
+            <p className="loading-message">{loadingMessage}</p>
+          </div>
+        </div>
+      )}
+
+      <header className="header">
+        <div className="header-inner">
+          <div className="header-brand">
+            <span className="header-logo">MAISuite Flow</span>
+            <span className="header-sep">|</span>
+            <span className="header-title">AI Video Recreator</span>
+          </div>
+          <p className="header-tagline">
+            Analyze any video and generate ready-to-use prompts for every platform
+          </p>
+        </div>
+      </header>
+
+      <main className="main">
+        <div className="card">
+          <h2 className="card-title">Upload Your Video</h2>
+
+          <div
+            className={`upload-zone ${dragOver ? 'upload-zone--dragover' : ''} ${videoFile ? 'upload-zone--filled' : ''}`}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+            />
+            {videoFile ? (
+              <div className="upload-zone-filled">
+                <span className="upload-icon">&#127916;</span>
+                <div>
+                  <p className="upload-filename">{videoFile.name}</p>
+                  <p className="upload-filesize">
+                    {(videoFile.size / 1024 / 1024).toFixed(1)} MB
+                  </p>
+                </div>
+                <button
+                  className="upload-remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVideoFile(null);
+                    setResult(null);
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+            ) : (
+              <div className="upload-zone-empty">
+                <span className="upload-icon upload-icon--large">&#128249;</span>
+                <p className="upload-hint">
+                  Drag &amp; drop a video file here, or{' '}
+                  <span className="upload-link">browse</span>
+                </p>
+                <p className="upload-formats">MP4, MOV, AVI, WebM supported</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="card-title">Describe Your Vision</h2>
+          <textarea
+            className="description-textarea"
+            placeholder="Describe what you're trying to recreate or achieve with this video. What's the style, tone, and purpose? The more detail you provide, the better the generated prompts will be."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={5}
+          />
+          <p className="char-count">{description.length} characters</p>
+        </div>
+
+        <div className="card">
+          <h2 className="card-title">Select Platforms</h2>
+          <p className="card-subtitle">
+            Choose which platforms you want prompts generated for
+          </p>
+          <PlatformSelector selected={platforms} onChange={setPlatforms} />
+        </div>
+
+        {error && (
+          <div className="error-banner">
+            <span className="error-icon">&#9888;</span>
+            <span>{error}</span>
+            <button className="error-dismiss" onClick={() => setError(null)}>
+              &times;
+            </button>
+          </div>
+        )}
+
+        <div className="analyze-row">
+          <button
+            className="analyze-btn"
+            onClick={handleAnalyze}
+            disabled={!canAnalyze || loading}
+          >
+            {loading ? 'Analyzing...' : 'Analyze Video'}
+          </button>
+          {!canAnalyze && !loading && (
+            <p className="analyze-hint">
+              Upload a video, add a description, and select at least one platform to continue.
+            </p>
+          )}
+        </div>
+
+        {result && (
+          <ResultsTabs result={result} selectedPlatforms={platforms} />
+        )}
+      </main>
+
+      <footer className="footer">
+        <p>
+          Powered by{' '}
+          <span className="footer-brand">Claude AI</span>
+          {' · '}
+          <span className="footer-suite">MAISuite Flow</span>
+        </p>
+      </footer>
+    </div>
   );
 }
-
-function App() {
-  return (
-    <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  );
-}
-
-export default App;

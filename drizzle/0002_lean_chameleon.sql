@@ -1,1 +1,0 @@
-ALTER TABLE `prompts` MODIFY COLUMN `promptType` enum('suno_music','cover_art','master_guide','higgsfield_image','capcut_instructions','sfx_breakdown') NOT NULL;
