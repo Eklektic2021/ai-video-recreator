@@ -9,7 +9,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 const SYSTEM_PROMPT = `You are an expert video analysis AI for MAISuite Flow. When given a video description and platform selections, you analyze the content and generate comprehensive, production-ready prompts and instructions.
@@ -70,6 +69,7 @@ Always respond with a single valid JSON object matching this exact structure (no
 Generate scene analysis with 3-8 scenes depending on content length. Include only the platforms specified by the user. Make all prompts detailed, platform-specific, and immediately usable.`;
 
 async function analyzeVideo(
+  anthropic: Anthropic,
   description: string,
   platforms: { video: string[]; music: string[]; editing: string[] }
 ): Promise<object> {
@@ -124,6 +124,7 @@ Generate a complete analysis with scene breakdown, platform-specific prompts for
 }
 
 async function main() {
+  const anthropic = new Anthropic();
   const app = express();
   app.use(express.json());
 
@@ -142,7 +143,7 @@ async function main() {
         return;
       }
 
-      const result = await analyzeVideo(description, platforms);
+      const result = await analyzeVideo(anthropic, description, platforms);
       res.json(result);
     } catch (err: unknown) {
       console.error('Analysis error:', err);

@@ -183,7 +183,7 @@ export default function App() {
             placeholder="Describe what you're trying to recreate or achieve with this video. What's the style, tone, and purpose? The more detail you provide, the better the generated prompts will be."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={5}
+            rows={8}
           />
           <p className="char-count">{description.length} characters</p>
         </div>
