@@ -35,6 +35,16 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Re-read from localStorage on mount in case useState lazy-init ran before
+  // storage was readable (e.g. browser extension interference or hydration quirks)
+  useEffect(() => {
+    if (!apiKey) {
+      const stored = getStoredApiKey();
+      if (stored) setApiKey(stored);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(DARK_MODE_KEY, String(darkMode));
     if (darkMode) {

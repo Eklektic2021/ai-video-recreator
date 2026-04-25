@@ -4,15 +4,27 @@ import type { AnalysisResult, SelectedPlatforms } from '../types';
 export const STORAGE_KEY = 'maisuite_anthropic_key';
 
 export function getStoredApiKey(): string {
-  return localStorage.getItem(STORAGE_KEY) ?? '';
+  try {
+    return localStorage.getItem(STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export function saveApiKey(key: string): void {
-  localStorage.setItem(STORAGE_KEY, key.trim());
+  try {
+    localStorage.setItem(STORAGE_KEY, key.trim());
+  } catch {
+    // localStorage unavailable — key won't persist but app still works
+  }
 }
 
 export function clearApiKey(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 const SYSTEM_PROMPT = `You are an expert video analysis AI for MAISuite Flow. When given a video description and platform selections, you analyze the content and generate comprehensive, production-ready prompts and instructions.

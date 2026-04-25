@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { saveApiKey } from '../lib/anthropic';
+import { saveApiKey, getStoredApiKey } from '../lib/anthropic';
 import {
   getStoredOpenAIKey,
   saveOpenAIKey,
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function ApiKeySetup({ onSave }: Props) {
-  const [key, setKey] = useState('');
+  const [key, setKey] = useState(getStoredApiKey);
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
 
@@ -65,7 +65,7 @@ export default function ApiKeySetup({ onSave }: Props) {
             value={key}
             onChange={(e) => { setKey(e.target.value); setError(''); }}
             onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            autoFocus
+            autoFocus={!key}
             spellCheck={false}
           />
           <button className="apikey-toggle" type="button" onClick={() => setShow((s) => !s)} tabIndex={-1}>
