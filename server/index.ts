@@ -1,6 +1,3 @@
-import { config } from 'dotenv';
-config();
-
 import Anthropic from '@anthropic-ai/sdk';
 import express from 'express';
 import multer from 'multer';
@@ -134,8 +131,7 @@ Generate a complete analysis with scene breakdown, platform-specific prompts for
 
 async function main() {
   if (!apiKey) {
-    console.error('[startup] FATAL: ANTHROPIC_API_KEY is not set. Exiting.');
-    process.exit(1);
+    console.warn('[startup] WARNING: ANTHROPIC_API_KEY is not set. Requests will fail.');
   }
 
   const anthropic = new Anthropic({ apiKey });
