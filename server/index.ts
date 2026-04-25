@@ -4,7 +4,8 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json());
+// Base64 reference images can be several MB; increase limit accordingly
+app.use(express.json({ limit: '15mb' }));
 
 // ── Replicate proxy ──────────────────────────────────────────────────────────
 app.post('/api/replicate', async (req, res) => {
@@ -14,25 +15,34 @@ app.post('/api/replicate', async (req, res) => {
     return;
   }
 
-  const { prompt } = req.body as { prompt?: string };
+  const { prompt, referenceImageBase64 } = req.body as {
+    prompt?: string;
+    referenceImageBase64?: string;
+  };
+
   if (!prompt) {
     res.status(400).json({ error: 'Missing prompt in request body' });
     return;
   }
 
+  const useRedux = !!referenceImageBase64;
+  const modelUrl = useRedux
+    ? 'https://api.replicate.com/v1/models/black-forest-labs/flux-redux-dev/predictions'
+    : 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions';
+
+  const input = useRedux
+    ? { redux_image: referenceImageBase64, prompt }
+    : { prompt };
+
   try {
-    // Create prediction
-    const createRes = await fetch(
-      'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Token ${apiKey}`,
-        },
-        body: JSON.stringify({ input: { prompt } }),
-      }
-    );
+    const createRes = await fetch(modelUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Token ${apiKey}`,
+      },
+      body: JSON.stringify({ input }),
+    });
 
     if (!createRes.ok) {
       const err = await createRes.json().catch(() => ({})) as { detail?: string };
@@ -43,13 +53,19 @@ app.post('/api/replicate', async (req, res) => {
     const prediction = await createRes.json() as {
       id: string;
       status: string;
-      output?: string[];
+      output?: string[] | string;
       error?: string;
     };
 
-    if (prediction.status === 'succeeded' && prediction.output?.[0]) {
-      res.json({ url: prediction.output[0] });
-      return;
+    const extractUrl = (output: string[] | string | undefined): string | null => {
+      if (!output) return null;
+      if (Array.isArray(output)) return output[0] ?? null;
+      return output;
+    };
+
+    if (prediction.status === 'succeeded') {
+      const url = extractUrl(prediction.output);
+      if (url) { res.json({ url }); return; }
     }
 
     // Poll until complete
@@ -68,13 +84,13 @@ app.post('/api/replicate', async (req, res) => {
 
       const poll = await pollRes.json() as {
         status: string;
-        output?: string[];
+        output?: string[] | string;
         error?: string;
       };
 
-      if (poll.status === 'succeeded' && poll.output?.[0]) {
-        res.json({ url: poll.output[0] });
-        return;
+      if (poll.status === 'succeeded') {
+        const url = extractUrl(poll.output);
+        if (url) { res.json({ url }); return; }
       }
 
       if (poll.status === 'failed' || poll.status === 'canceled') {

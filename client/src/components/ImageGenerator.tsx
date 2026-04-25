@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { SceneAnalysis } from '../types';
 import {
   getStoredOpenAIKey,
@@ -15,6 +15,9 @@ interface ImageState {
   error: string | null;
 }
 
+const MAX_REFS = 3;
+const ACCEPTED = 'image/jpeg,image/png,image/webp';
+
 function buildPrompt(scene: SceneAnalysis): string {
   return [
     scene.description,
@@ -25,6 +28,15 @@ function buildPrompt(scene: SceneAnalysis): string {
   ]
     .filter(Boolean)
     .join('. ');
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 async function downloadImage(url: string, sceneNum: number) {
@@ -43,13 +55,28 @@ async function downloadImage(url: string, sceneNum: number) {
 
 export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) {
   const [provider, setProvider] = useState<Provider>('dalle');
+  const [refImages, setRefImages] = useState<string[]>([]);
   const [images, setImages] = useState<Record<number, ImageState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openaiKey = getStoredOpenAIKey();
   const replicateKey = getStoredReplicateKey();
   const activeKey = provider === 'dalle' ? openaiKey : replicateKey;
   const missingKey = !activeKey;
+
+  const handleRefUpload = useCallback(async (files: FileList | null) => {
+    if (!files) return;
+    const remaining = MAX_REFS - refImages.length;
+    if (remaining <= 0) return;
+    const toAdd = Array.from(files).slice(0, remaining);
+    const encoded = await Promise.all(toAdd.map(fileToBase64));
+    setRefImages((prev) => [...prev, ...encoded].slice(0, MAX_REFS));
+  }, [refImages.length]);
+
+  const removeRef = useCallback((idx: number) => {
+    setRefImages((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
 
   const setImageState = useCallback((sceneNum: number, update: Partial<ImageState>) => {
     setImages((prev) => {
@@ -67,8 +94,8 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
         const prompt = buildPrompt(scene);
         const url =
           provider === 'dalle'
-            ? await generateWithDalle(key, prompt)
-            : await generateWithFlux(key, prompt);
+            ? await generateWithDalle(key, prompt, refImages)
+            : await generateWithFlux(key, prompt, refImages);
         setImageState(scene.scene, { url, loading: false });
       } catch (err) {
         setImageState(scene.scene, {
@@ -77,7 +104,7 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
         });
       }
     },
-    [provider, openaiKey, replicateKey, setImageState]
+    [provider, openaiKey, replicateKey, refImages, setImageState]
   );
 
   const generateAll = useCallback(async () => {
@@ -88,6 +115,8 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
     }
     setGeneratingAll(false);
   }, [missingKey, generatingAll, scenes, generateOne]);
+
+  const hasRefs = refImages.length > 0;
 
   return (
     <div className="imggen-section">
@@ -100,13 +129,13 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
               className={`imggen-provider-btn${provider === 'dalle' ? ' imggen-provider-btn--active' : ''}`}
               onClick={() => setProvider('dalle')}
             >
-              DALL·E 3 (OpenAI)
+              gpt-image-1 (OpenAI)
             </button>
             <button
               className={`imggen-provider-btn${provider === 'flux' ? ' imggen-provider-btn--active' : ''}`}
               onClick={() => setProvider('flux')}
             >
-              FLUX Schnell (Replicate)
+              {hasRefs ? 'FLUX Redux (Replicate)' : 'FLUX Schnell (Replicate)'}
             </button>
           </div>
 
@@ -122,6 +151,60 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Reference image upload ── */}
+      <div className="imggen-ref-section">
+        <div className="imggen-ref-header">
+          <span className="imggen-ref-label">Character &amp; Scene Reference</span>
+          <span className="imggen-ref-count">{refImages.length}/{MAX_REFS}</span>
+        </div>
+        <p className="imggen-ref-desc">
+          Upload reference images to maintain character consistency across all scenes
+        </p>
+
+        <div className="imggen-ref-row">
+          {refImages.map((src, idx) => (
+            <div key={idx} className="imggen-ref-thumb">
+              <img src={src} alt={`Reference ${idx + 1}`} className="imggen-ref-img" />
+              <button
+                className="imggen-ref-remove"
+                onClick={() => removeRef(idx)}
+                aria-label={`Remove reference image ${idx + 1}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+
+          {refImages.length < MAX_REFS && (
+            <button
+              className="imggen-ref-add"
+              onClick={() => fileInputRef.current?.click()}
+              title="Add reference image"
+            >
+              <span className="imggen-ref-plus">+</span>
+              <span className="imggen-ref-add-label">Add image</span>
+            </button>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED}
+          multiple
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            handleRefUpload(e.target.files);
+            e.target.value = '';
+          }}
+        />
+
+        <p className="imggen-ref-note">
+          OpenAI uses <strong>gpt-image-1</strong> for reference consistency.
+          Replicate uses <strong>FLUX Redux</strong> when references are provided, FLUX Schnell otherwise.
+        </p>
       </div>
 
       {/* ── Missing key notice ── */}
