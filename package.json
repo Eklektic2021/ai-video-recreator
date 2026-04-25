@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.55.0",
+    "firebase": "^12.12.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "serve": "^14.2.4"

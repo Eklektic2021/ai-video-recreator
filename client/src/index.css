@@ -298,7 +298,8 @@ body {
 .platform-pills-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.625rem;
+  gap: 8px;
+  padding: 4px 0;
 }
 
 .platform-pill {
@@ -932,3 +933,115 @@ body {
   text-decoration: none;
 }
 .apikey-link:hover { text-decoration: underline; }
+
+/* ─── AuthGuard ──────────────────────────────────────────────────────────── */
+.authguard-center {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+  padding: 2rem 1rem;
+}
+.authguard-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--glow-navy);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  text-align: center;
+}
+.authguard-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.authguard-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.authguard-desc {
+  font-size: 0.875rem;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.authguard-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition),
+              box-shadow var(--transition);
+}
+.authguard-google-btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  background: var(--bg-hover);
+  box-shadow: var(--glow-cyan);
+}
+.authguard-google-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.authguard-google-icon { flex-shrink: 0; }
+.authguard-error {
+  font-size: 0.8rem;
+  color: #ff6b6b;
+}
+
+/* signed-in user bar */
+.authguard-user-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 1.5rem;
+  background: rgba(10, 15, 30, 0.8);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+.authguard-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.authguard-display-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.authguard-signout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.authguard-signout-btn:hover {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}

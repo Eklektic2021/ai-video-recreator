@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import ApiKeySetup from './components/ApiKeySetup';
+import AuthGuard from './components/AuthGuard';
 import PlatformSelector from './components/PlatformSelector';
 import ResultsTabs from './components/ResultsTabs';
 import { getStoredApiKey, clearApiKey, runAnalysis } from './lib/anthropic';
@@ -85,16 +86,19 @@ export default function App() {
 
   if (!apiKey || showKeySetup) {
     return (
-      <ApiKeySetup
-        onSave={(key) => {
-          setApiKey(key);
-          setShowKeySetup(false);
-        }}
-      />
+      <AuthGuard>
+        <ApiKeySetup
+          onSave={(key) => {
+            setApiKey(key);
+            setShowKeySetup(false);
+          }}
+        />
+      </AuthGuard>
     );
   }
 
   return (
+    <AuthGuard>
     <div className="app">
       {loading && (
         <div className="loading-overlay">
@@ -247,5 +251,6 @@ export default function App() {
         </p>
       </footer>
     </div>
+    </AuthGuard>
   );
 }
