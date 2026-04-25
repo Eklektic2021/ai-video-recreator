@@ -1,3 +1,6 @@
+import { config } from 'dotenv';
+config();
+
 import Anthropic from '@anthropic-ai/sdk';
 import express from 'express';
 import multer from 'multer';
@@ -8,6 +11,12 @@ import { createServer as createViteServer } from 'vite';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
+
+const apiKey = process.env.ANTHROPIC_API_KEY;
+console.log('[startup] ANTHROPIC_API_KEY present:', !!apiKey);
+console.log('[startup] ANTHROPIC_API_KEY prefix:', apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING');
+console.log('[startup] NODE_ENV:', process.env.NODE_ENV);
+console.log('[startup] PORT:', PORT);
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -124,7 +133,12 @@ Generate a complete analysis with scene breakdown, platform-specific prompts for
 }
 
 async function main() {
-  const anthropic = new Anthropic();
+  if (!apiKey) {
+    console.error('[startup] FATAL: ANTHROPIC_API_KEY is not set. Exiting.');
+    process.exit(1);
+  }
+
+  const anthropic = new Anthropic({ apiKey });
   const app = express();
   app.use(express.json());
 
@@ -168,7 +182,7 @@ async function main() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`[startup] Server running on http://localhost:${PORT}`);
   });
 }
 

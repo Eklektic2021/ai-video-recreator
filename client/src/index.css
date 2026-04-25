@@ -217,7 +217,8 @@ body {
 .btn-remove:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.1); }
 
 /* ─── Textarea ───────────────────────────────────────────────────────────── */
-.textarea {
+.textarea,
+.description-textarea {
   width: 100%;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -228,12 +229,14 @@ body {
   line-height: 1.6;
   padding: 0.75rem 1rem;
   resize: vertical;
-  min-height: 120px;
+  min-height: 200px;
   transition: border-color var(--transition), box-shadow var(--transition);
   outline: none;
 }
-.textarea::placeholder { color: var(--text-3); }
-.textarea:focus {
+.textarea::placeholder,
+.description-textarea::placeholder { color: var(--text-3); }
+.textarea:focus,
+.description-textarea:focus {
   border-color: var(--border-active);
   box-shadow: var(--glow-cyan);
 }
