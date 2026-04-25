@@ -1216,3 +1216,141 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ─── Theme toggle button ────────────────────────────────────────────────── */
+.theme-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 0.85rem;
+  width: 32px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition),
+              background var(--transition);
+  flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.06);
+}
+
+/* ─── Light mode overrides ───────────────────────────────────────────────── */
+.light-mode,
+body.light-mode {
+  --bg-app:    #f4f4f4;
+  --bg-card:   #ffffff;
+  --bg-input:  #efefef;
+  --bg-hover:  #e6e6e6;
+  --text-1:    #111111;
+  --text-2:    #444444;
+  --text-3:    #888888;
+  --border:          rgba(0, 0, 0, 0.12);
+  --border-active:   rgba(0, 153, 255, 0.55);
+  --border-gold:     rgba(160, 120, 0, 0.4);
+  --glow-navy: 0 0 20px rgba(0, 102, 204, 0.12);
+  --glow-cyan: 0 0 16px rgba(0, 153, 255, 0.15);
+}
+
+/* body background when light mode is active */
+body.light-mode {
+  background: #f4f4f4;
+}
+
+/* header backdrop in light mode */
+.light-mode .header {
+  background: rgba(244, 244, 244, 0.95);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+/* loading overlay in light mode */
+.light-mode .loading-overlay {
+  background: rgba(244, 244, 244, 0.85);
+}
+.light-mode .loading-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light-mode .loading-message {
+  color: #444444;
+}
+
+/* scrollbar in light mode */
+.light-mode ::-webkit-scrollbar-track { background: #efefef; }
+.light-mode ::-webkit-scrollbar-thumb { background: #bbbbbb; }
+.light-mode ::-webkit-scrollbar-thumb:hover { background: #0066cc; }
+
+/* upload zone dashed border in light mode */
+.light-mode .upload-zone {
+  border-color: rgba(0, 0, 0, 0.18);
+}
+.light-mode .upload-zone--dragover {
+  border-color: var(--cyan);
+  background: rgba(0, 153, 255, 0.04);
+}
+
+/* tabs in light mode */
+.light-mode .main-tab {
+  color: #666666;
+}
+.light-mode .main-tab--active {
+  color: #111111;
+  border-bottom-color: var(--cyan);
+}
+.light-mode .main-tab:hover:not(.main-tab--active) {
+  color: #111111;
+}
+
+/* footer in light mode */
+.light-mode .footer {
+  border-top-color: rgba(0, 0, 0, 0.1);
+  color: #888888;
+}
+
+/* platform pills in light mode */
+.light-mode .platform-pill {
+  background: #f0f0f0;
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #444444;
+}
+.light-mode .platform-pill:hover {
+  background: #e6e6e6;
+  color: #111111;
+}
+.light-mode .platform-pill--selected {
+  border-color: #0099cc;
+  background: rgba(0, 153, 204, 0.08);
+  color: #111111;
+}
+
+/* projects panel in light mode */
+.light-mode .projects-panel {
+  background: #ffffff;
+  border-left-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .projects-panel-header {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .project-item {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .project-item:hover {
+  background: #f4f4f4;
+}
+
+/* SFX table in light mode */
+.light-mode .sfx-table th {
+  background: #efefef;
+  color: #444444;
+}
+.light-mode .sfx-table td {
+  border-bottom-color: rgba(0, 0, 0, 0.07);
+}
+.light-mode .sfx-table tr:hover td {
+  background: #f8f8f8;
+}
