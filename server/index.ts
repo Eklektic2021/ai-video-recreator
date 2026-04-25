@@ -131,6 +131,15 @@ async function main() {
   const app = express();
   app.use(express.json());
 
+  app.get('/api/env-check', (_req, res) => {
+    res.json({
+      hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+      nodeEnv: process.env.NODE_ENV,
+      port: process.env.PORT,
+      allKeys: Object.keys(process.env).sort(),
+    });
+  });
+
   app.post('/api/analyze', upload.single('video'), async (req, res) => {
     try {
       const description = req.body.description as string;
@@ -147,9 +156,11 @@ async function main() {
       }
 
       const routeApiKey = process.env.ANTHROPIC_API_KEY;
-      console.log('[/api/analyze] ANTHROPIC_API_KEY present:', !!routeApiKey);
       if (!routeApiKey) {
-        res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on this server.' });
+        console.error('[/api/analyze] ANTHROPIC_API_KEY missing. All visible env keys:', Object.keys(process.env).sort().join(', '));
+        res.status(500).json({
+          error: 'API key not configured — ANTHROPIC_API_KEY is missing from the server environment. Please contact the site owner.',
+        });
         return;
       }
 
