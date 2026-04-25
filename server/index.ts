@@ -128,7 +128,6 @@ Generate a complete analysis with scene breakdown, platform-specific prompts for
 }
 
 async function main() {
-  const anthropic = new Anthropic();
   const app = express();
   app.use(express.json());
 
@@ -147,6 +146,14 @@ async function main() {
         return;
       }
 
+      const routeApiKey = process.env.ANTHROPIC_API_KEY;
+      console.log('[/api/analyze] ANTHROPIC_API_KEY present:', !!routeApiKey);
+      if (!routeApiKey) {
+        res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on this server.' });
+        return;
+      }
+
+      const anthropic = new Anthropic({ apiKey: routeApiKey });
       const result = await analyzeVideo(anthropic, description, platforms);
       res.json(result);
     } catch (err: unknown) {
