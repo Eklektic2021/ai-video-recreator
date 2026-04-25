@@ -27,51 +27,78 @@ function stripDataPrefix(dataUri: string): string {
   return idx !== -1 ? dataUri.slice(idx + 1) : dataUri;
 }
 
+// Converts a base64 data URI to a File object for FormData
+function base64ToFile(dataUri: string, filename: string): File {
+  const comma = dataUri.indexOf(',');
+  const header = dataUri.slice(0, comma);
+  const b64 = dataUri.slice(comma + 1);
+  const mimeMatch = header.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new File([arr], filename, { type: mime });
+}
+
+function parseOpenAIImage(data: { data: { url?: string; b64_json?: string }[] }): string {
+  const item = data.data[0];
+  if (item?.url) return item.url;
+  if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  throw new Error('No image returned from OpenAI');
+}
+
 export async function generateWithDalle(
   apiKey: string,
   prompt: string,
   refImages: string[] = []
 ): Promise<string> {
   const hasRefs = refImages.length > 0;
-  const finalPrompt = hasRefs
-    ? `Generate this scene maintaining exact consistency with the reference character(s): ${prompt}`
-    : prompt;
 
-  const body: Record<string, unknown> = {
-    model: 'gpt-image-1',
-    prompt: finalPrompt,
-    n: 1,
-    size: '1024x1024',
-    quality: 'standard',
-  };
-
-  if (hasRefs) {
-    // Pass reference images as an array of base64 data URIs
-    body.image = refImages.map((img) => ({
-      type: 'image_url',
-      image_url: { url: img },
-    }));
+  if (!hasRefs) {
+    // No reference images — standard generations endpoint
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-image-1',
+        prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'standard',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
+      throw new Error(err?.error?.message ?? `OpenAI error ${res.status}`);
+    }
+    return parseOpenAIImage(await res.json() as { data: { url?: string; b64_json?: string }[] });
   }
 
-  const res = await fetch('https://api.openai.com/v1/images/generations', {
+  // Reference images provided — use edits endpoint with multipart FormData
+  const finalPrompt = `Generate this scene maintaining exact consistency with the reference character(s): ${prompt}`;
+  const form = new FormData();
+  form.append('model', 'gpt-image-1');
+  form.append('image', base64ToFile(refImages[0], 'reference.png'));
+  form.append('prompt', finalPrompt);
+  form.append('size', '1024x1024');
+  form.append('n', '1');
+
+  const res = await fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      // No Content-Type — browser sets it automatically with the correct multipart boundary
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify(body),
+    body: form,
   });
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
     throw new Error(err?.error?.message ?? `OpenAI error ${res.status}`);
   }
-
-  const data = await res.json() as { data: { url?: string; b64_json?: string }[] };
-  const item = data.data[0];
-  if (item.url) return item.url;
-  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
-  throw new Error('No image returned from OpenAI');
+  return parseOpenAIImage(await res.json() as { data: { url?: string; b64_json?: string }[] });
 }
 
 export async function generateWithFlux(
