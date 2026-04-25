@@ -9,6 +9,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { AnalysisResult, SelectedPlatforms } from '../types';
@@ -36,6 +37,28 @@ export async function saveProject(
 
 export async function deleteProject(uid: string, projectId: string): Promise<void> {
   await deleteDoc(doc(db, 'users', uid, 'projects', projectId));
+}
+
+export async function shareProject(project: Project): Promise<string> {
+  const ref = await addDoc(collection(db, 'shared'), {
+    title: project.title,
+    createdAt: serverTimestamp(),
+    platforms: project.platforms,
+    output: project.output,
+  });
+  return ref.id;
+}
+
+export interface SharedProject {
+  title: string;
+  createdAt: Timestamp | null;
+  platforms: SelectedPlatforms;
+  output: AnalysisResult;
+}
+
+export async function getSharedProject(shareId: string): Promise<SharedProject | null> {
+  const snap = await getDoc(doc(db, 'shared', shareId));
+  return snap.exists() ? (snap.data() as SharedProject) : null;
 }
 
 export function useProjects(uid: string) {

@@ -1217,6 +1217,178 @@ body {
   cursor: not-allowed;
 }
 
+/* ─── Project item actions (share + delete) ─────────────────────────────── */
+.project-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.project-share-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 0.8rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--transition), color var(--transition),
+              background var(--transition);
+}
+.project-share-btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.08);
+}
+.project-share-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.projects-toast {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.45rem 1.1rem;
+  border-radius: 2rem;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  z-index: 10;
+}
+
+/* ─── Shared view ────────────────────────────────────────────────────────── */
+.shared-center {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+}
+
+.shared-error-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem 2rem;
+  text-align: center;
+  max-width: 420px;
+  width: 90%;
+}
+
+.shared-error-msg {
+  color: var(--text-2);
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.shared-home-btn {
+  display: inline-block;
+  background: var(--navy);
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background var(--transition), box-shadow var(--transition);
+}
+.shared-home-btn:hover {
+  background: rgba(0, 102, 204, 0.35);
+  box-shadow: var(--glow-cyan);
+}
+
+.shared-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gold);
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 2rem;
+  padding: 0.2rem 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shared-cta-btn {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--cyan);
+  text-decoration: none;
+  border: 1px solid var(--cyan);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.75rem;
+  transition: background var(--transition);
+}
+.shared-cta-btn:hover {
+  background: rgba(0, 217, 255, 0.08);
+}
+
+.shared-project-meta {
+  margin-bottom: 1.5rem;
+}
+
+.shared-project-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 0.35rem;
+}
+
+.shared-project-date {
+  font-size: 0.8rem;
+  color: var(--text-3);
+  margin-bottom: 0.75rem;
+}
+
+.shared-platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.shared-platform-tag {
+  font-size: 0.72rem;
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.08);
+  border: 1px solid rgba(0, 217, 255, 0.2);
+  border-radius: 2rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.shared-footer-cta {
+  margin-top: 2rem;
+  text-align: center;
+  padding: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.shared-footer-text {
+  font-size: 0.9rem;
+  color: var(--text-2);
+  margin-bottom: 0.75rem;
+}
+
+.shared-cta-large {
+  display: inline-block;
+  font-size: 0.9rem;
+}
+
 /* ─── Theme toggle button ────────────────────────────────────────────────── */
 .theme-toggle-btn {
   background: transparent;
@@ -1353,4 +1525,24 @@ body.light-mode {
 }
 .light-mode .sfx-table tr:hover td {
   background: #f8f8f8;
+}
+
+/* shared view in light mode */
+.light-mode .shared-error-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .shared-project-meta {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .shared-footer-cta {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .projects-toast {
+  background: #ffffff;
+  border-color: #0099cc;
+  color: #0066cc;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
