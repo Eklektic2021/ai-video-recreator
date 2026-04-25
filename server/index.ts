@@ -9,11 +9,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
-console.log('[startup] ANTHROPIC_API_KEY present:', !!apiKey);
-console.log('[startup] ANTHROPIC_API_KEY prefix:', apiKey ? apiKey.slice(0, 8) + '...' : 'MISSING');
 console.log('[startup] NODE_ENV:', process.env.NODE_ENV);
 console.log('[startup] PORT:', PORT);
+console.log('[startup] env keys:', Object.keys(process.env).join(', '));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
@@ -130,11 +128,7 @@ Generate a complete analysis with scene breakdown, platform-specific prompts for
 }
 
 async function main() {
-  if (!apiKey) {
-    console.warn('[startup] WARNING: ANTHROPIC_API_KEY is not set. Requests will fail.');
-  }
-
-  const anthropic = new Anthropic({ apiKey });
+  const anthropic = new Anthropic();
   const app = express();
   app.use(express.json());
 
