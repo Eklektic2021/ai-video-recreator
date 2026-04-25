@@ -1546,3 +1546,344 @@ body.light-mode {
   color: #0066cc;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
+
+/* ─── ApiKeySetup additions ──────────────────────────────────────────────── */
+.apikey-field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 0.4rem;
+  margin-top: 1rem;
+  letter-spacing: 0.02em;
+}
+.apikey-required {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.1);
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  border-radius: 2rem;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.4rem;
+}
+.apikey-optional {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-3);
+  margin-left: 0.3rem;
+}
+.apikey-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+.apikey-divider::before,
+.apikey-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── Image Generator ────────────────────────────────────────────────────── */
+.imggen-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.imggen-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.imggen-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 0;
+}
+
+.imggen-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.imggen-provider-toggle {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.imggen-provider-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.imggen-provider-btn--active {
+  background: var(--navy);
+  color: var(--cyan);
+}
+.imggen-provider-btn:hover:not(.imggen-provider-btn--active) {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+
+.imggen-all-btn {
+  background: var(--navy);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+.imggen-all-btn:hover:not(:disabled) {
+  background: rgba(0, 102, 204, 0.35);
+  box-shadow: var(--glow-cyan);
+}
+.imggen-all-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.imggen-missing-key {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: rgba(255, 215, 0, 0.06);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.imggen-missing-icon {
+  color: var(--gold);
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+.imggen-missing-key strong {
+  color: var(--text-1);
+}
+
+.imggen-scenes {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.imggen-scene-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.imggen-scene-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.imggen-scene-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.imggen-scene-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.imggen-scene-ts {
+  font-size: 0.75rem;
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.08);
+  border: 1px solid rgba(0, 217, 255, 0.18);
+  border-radius: 2rem;
+  padding: 0.15rem 0.55rem;
+}
+
+.imggen-generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--navy);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+.imggen-generate-btn:hover:not(:disabled) {
+  background: rgba(0, 102, 204, 0.35);
+  box-shadow: var(--glow-cyan);
+}
+.imggen-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.imggen-btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 217, 255, 0.3);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.imggen-prompt-preview {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  line-height: 1.5;
+  padding: 0.65rem 1.25rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.imggen-loading-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+}
+
+.imggen-loading-text {
+  font-size: 0.8rem;
+  color: var(--text-3);
+  margin: 0;
+}
+
+.imggen-result {
+  display: flex;
+  flex-direction: column;
+}
+
+.imggen-image {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 520px;
+}
+
+.imggen-image-actions {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.imggen-download-btn,
+.imggen-regen-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition),
+              background var(--transition);
+}
+.imggen-download-btn:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 217, 255, 0.06);
+}
+.imggen-regen-btn:hover:not(:disabled) {
+  border-color: var(--text-3);
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+.imggen-regen-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.imggen-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 107, 107, 0.06);
+  border-top: 1px solid rgba(255, 107, 107, 0.2);
+  font-size: 0.8rem;
+  color: #ff8080;
+}
+
+.imggen-retry-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ff8080;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition), border-color var(--transition);
+}
+.imggen-retry-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.1);
+  border-color: #ff8080;
+}
+.imggen-retry-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* light mode overrides for image generator */
+.light-mode .imggen-scene-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .imggen-scene-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .imggen-prompt-preview {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .imggen-provider-toggle {
+  background: #efefef;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light-mode .imggen-provider-btn--active {
+  background: #e0ecff;
+  color: #0066cc;
+}
+.light-mode .imggen-image-actions {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}

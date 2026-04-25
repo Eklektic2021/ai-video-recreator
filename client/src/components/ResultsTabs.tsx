@@ -7,6 +7,7 @@ import {
   EditingInstructions,
   SFXItem,
 } from '../types';
+import ImageGenerator from './ImageGenerator';
 
 interface Props {
   result: AnalysisResult;
@@ -270,6 +271,7 @@ function SFXTable({ items }: { items: SFXItem[] }) {
 
 const MAIN_TABS = [
   { id: 'scenes', label: 'Scene Analysis' },
+  { id: 'images', label: 'Image Gen' },
   { id: 'video', label: 'Video Prompts' },
   { id: 'music', label: 'Music Prompts' },
   { id: 'editing', label: 'Editing Guide' },
@@ -381,6 +383,10 @@ export default function ResultsTabs({ result, selectedPlatforms }: Props) {
               <SceneCard key={scene.scene} scene={scene} />
             ))}
           </div>
+        )}
+
+        {activeTab === 'images' && (
+          <ImageGenerator scenes={result.sceneAnalysis} />
         )}
 
         {activeTab === 'video' && (
