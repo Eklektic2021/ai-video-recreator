@@ -106,14 +106,18 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
+  const runwayHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    'X-Runway-Version': '2024-11-06',
+  };
+  console.log('[Runway] POST https://api.runwayml.com/v1/image_to_video');
+  console.log('[Runway] Headers:', JSON.stringify({ ...runwayHeaders, Authorization: `Bearer ${apiKey.slice(0, 8)}…` }));
+
   try {
     const createRes = await fetch('https://api.runwayml.com/v1/image_to_video', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'X-Runway-Version': '2024-11-06',
-      },
+      headers: runwayHeaders,
       body: JSON.stringify({
         model: 'gen4_turbo',
         promptImage: imageBase64,
@@ -242,10 +246,14 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
+  const viduHeaders = { 'Content-Type': 'application/json', Authorization: `Token ${apiKey}` };
+  console.log('[Vidu] POST https://api.vidu.studio/vidu/v1/tasks');
+  console.log('[Vidu] Headers:', JSON.stringify({ ...viduHeaders, Authorization: `Token ${apiKey.slice(0, 8)}…` }));
+
   try {
     const createRes = await fetch('https://api.vidu.studio/vidu/v1/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Token ${apiKey}` },
+      headers: viduHeaders,
       body: JSON.stringify({
         type: 'img2video',
         model: 'vidu-2.0',
