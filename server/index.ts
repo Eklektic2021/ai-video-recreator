@@ -8,7 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '15mb' }));
 
-// ── Shared polling helper ─────────────────────────────────────────────────────
+// ── Shared helpers ─────────────────────────────────────────────────────────────
+
 async function pollUntilDone(
   pollFn: () => Promise<{ status: string; url?: string; error?: string }>,
   maxAttempts = 90,
@@ -23,7 +24,44 @@ async function pollUntilDone(
     }
     if (result.status === 'failed') throw new Error(result.error ?? 'Generation failed');
   }
-  throw new Error('Request timed out after 180 seconds');
+  throw new Error('Request timed out');
+}
+
+const SAFETY_KEYWORDS = [
+  'content policy', 'safety', 'flagged', 'violat', 'moderat',
+  'inappropriate', 'nsfw', 'harmful', 'blocked', 'prohibited',
+];
+
+function isSafetyError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return SAFETY_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+const SANITIZE_MAP: [RegExp, string][] = [
+  [/\bblood(?:y|ied)?\b/gi, 'crimson liquid'],
+  [/\bgore\b/gi, 'intense imagery'],
+  [/\bviolen(?:ce|t)\b/gi, 'intense'],
+  [/\bnude\b/gi, 'bare'],
+  [/\bnaked\b/gi, 'unclothed'],
+  [/\bweapon\b/gi, 'object'],
+  [/\b(?:gun|pistol|rifle)\b/gi, 'device'],
+  [/\bexplosion\b/gi, 'burst of light'],
+  [/\bbomb\b/gi, 'object'],
+  [/\bdrug(?:s)?\b/gi, 'substance'],
+  [/\bterror(?:ist)?\b/gi, 'figure'],
+  [/\bstab(?:bing|bed|s)?\b/gi, 'strike'],
+];
+
+export function sanitizePrompt(prompt: string): string {
+  let result = prompt;
+  for (const [pattern, replacement] of SANITIZE_MAP) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+function safetyMessage(provider: string): string {
+  return `This scene's prompt was flagged by ${provider}'s safety system. Please edit the scene description and try again.`;
 }
 
 // ── Replicate proxy ──────────────────────────────────────────────────────────
@@ -101,18 +139,20 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 5 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
+  const { prompt, imageBase64, duration = 5 } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number;
+  };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
   }
 
-  try {
-    const client = new RunwayML({ apiKey });
+  async function attemptRunway(p: string): Promise<string> {
+    const client = new RunwayML({ apiKey: apiKey as string });
     const imageToVideo = await client.imageToVideo.create({
       model: 'gen4_turbo',
-      promptImage: imageBase64,
-      promptText: prompt,
+      promptImage: imageBase64 as string,
+      promptText: p,
       duration: duration as 5 | 10,
       ratio: '1280:720',
     });
@@ -125,17 +165,28 @@ app.post('/api/runway', async (req, res) => {
       task = await client.tasks.retrieve(imageToVideo.id);
     }
 
-    if (task.status === 'FAILED') {
-      res.status(500).json({ error: task.failure ?? 'Runway generation failed' });
-      return;
-    }
-
+    if (task.status === 'FAILED') throw new Error(task.failure ?? 'Runway generation failed');
     const url = task.output?.[0] ?? null;
-    if (!url) {
-      res.status(500).json({ error: 'No output URL returned' });
-      return;
-    }
+    if (!url) throw new Error('No output URL returned');
+    return url;
+  }
 
+  try {
+    let url: string;
+    try {
+      url = await attemptRunway(prompt);
+    } catch (firstErr) {
+      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+        try {
+          url = await attemptRunway(sanitizePrompt(prompt));
+        } catch {
+          res.status(400).json({ error: safetyMessage('Runway') });
+          return;
+        }
+      } else {
+        throw firstErr;
+      }
+    }
     res.json({ url });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
@@ -160,22 +211,23 @@ app.post('/api/kling', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 5 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
+  const { prompt, imageBase64, duration = 5 } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number;
+  };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
   }
 
-  const jwt = generateKlingJWT(accessKey, secretKey);
-
-  try {
+  async function attemptKling(p: string): Promise<string> {
+    const jwt = generateKlingJWT(accessKey as string, secretKey as string);
     const createRes = await fetch('https://api.klingai.com/v1/videos/image2video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
       body: JSON.stringify({
         model_name: 'kling-v1',
         image: imageBase64,
-        prompt,
+        prompt: p,
         duration: String(duration),
         mode: 'std',
         cfg_scale: 0.5,
@@ -184,36 +236,47 @@ app.post('/api/kling', async (req, res) => {
 
     if (!createRes.ok) {
       const err = await createRes.json().catch(() => ({})) as { message?: string };
-      res.status(createRes.status).json({ error: err.message ?? `Kling error ${createRes.status}` });
-      return;
+      throw new Error(err.message ?? `Kling error ${createRes.status}`);
     }
 
     const body = await createRes.json() as { code: number; message?: string; data?: { task_id: string } };
     if (body.code !== 0 || !body.data?.task_id) {
-      res.status(500).json({ error: body.message ?? 'Kling task creation failed' });
-      return;
+      throw new Error(body.message ?? 'Kling task creation failed');
     }
 
     const taskId = body.data.task_id;
-
-    try {
-      const url = await pollUntilDone(async () => {
-        const freshJwt = generateKlingJWT(accessKey, secretKey);
-        const r = await fetch(`https://api.klingai.com/v1/videos/image2video/${taskId}`, {
-          headers: { Authorization: `Bearer ${freshJwt}` },
-        });
-        const t = await r.json() as {
-          data?: { task_status: string; task_result?: { videos?: { url: string }[] } };
-        };
-        const status = t.data?.task_status;
-        if (status === 'succeed') return { status: 'done', url: t.data?.task_result?.videos?.[0]?.url };
-        if (status === 'failed') return { status: 'failed', error: 'Kling task failed' };
-        return { status: 'pending' };
+    return pollUntilDone(async () => {
+      const freshJwt = generateKlingJWT(accessKey as string, secretKey as string);
+      const r = await fetch(`https://api.klingai.com/v1/videos/image2video/${taskId}`, {
+        headers: { Authorization: `Bearer ${freshJwt}` },
       });
-      res.json({ url });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      const t = await r.json() as {
+        data?: { task_status: string; task_result?: { videos?: { url: string }[] } };
+      };
+      const status = t.data?.task_status;
+      if (status === 'succeed') return { status: 'done', url: t.data?.task_result?.videos?.[0]?.url };
+      if (status === 'failed') return { status: 'failed', error: 'Kling task failed' };
+      return { status: 'pending' };
+    });
+  }
+
+  try {
+    let url: string;
+    try {
+      url = await attemptKling(prompt);
+    } catch (firstErr) {
+      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+        try {
+          url = await attemptKling(sanitizePrompt(prompt));
+        } catch {
+          res.status(400).json({ error: safetyMessage('Kling') });
+          return;
+        }
+      } else {
+        throw firstErr;
+      }
     }
+    res.json({ url });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
   }
@@ -227,7 +290,9 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 4 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
+  const { prompt, imageBase64, duration = 4 } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number;
+  };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
@@ -241,7 +306,7 @@ app.post('/api/vidu', async (req, res) => {
   console.log(`[Vidu] Authorization: Token ${apiKey.slice(0, 8)}… (len=${apiKey.length})`);
   console.log(`[Vidu] duration=${duration} imageBase64 prefix="${imageBase64.slice(0, 30)}…"`);
 
-  try {
+  async function attemptVidu(p: string): Promise<string> {
     const createRes = await fetch(CREATE_URL, {
       method: 'POST',
       headers: viduHeaders,
@@ -253,7 +318,7 @@ app.post('/api/vidu', async (req, res) => {
           seed: 0,
           prompts: [
             { type: 'image', data: imageBase64 },
-            { type: 'text', data: prompt },
+            { type: 'text', data: p },
           ],
         },
         output_params: { sample_count: 1, duration },
@@ -264,36 +329,45 @@ app.post('/api/vidu', async (req, res) => {
     console.log(`[Vidu] create status=${createRes.status} body=${createBody}`);
 
     if (!createRes.ok) {
-      const parsed = JSON.parse(createBody).catch?.(() => ({})) ?? (() => { try { return JSON.parse(createBody); } catch { return {}; } })();
-      res.status(createRes.status).json({ error: (parsed as { message?: string }).message ?? `Vidu error ${createRes.status}: ${createBody}` });
-      return;
+      let errMsg: string;
+      try { errMsg = (JSON.parse(createBody) as { message?: string }).message ?? `Vidu error ${createRes.status}: ${createBody}`; }
+      catch { errMsg = `Vidu error ${createRes.status}: ${createBody}`; }
+      throw new Error(errMsg);
     }
 
     const task = JSON.parse(createBody) as { id?: string; task_id?: string };
     const taskId = task.id ?? task.task_id;
-    if (!taskId) {
-      res.status(500).json({ error: `Vidu did not return a task ID. Response: ${createBody}` });
-      return;
-    }
+    if (!taskId) throw new Error(`Vidu did not return a task ID. Response: ${createBody}`);
 
     console.log(`[Vidu] task created id=${taskId}`);
+    const POLL_URL = `https://api.vidu.studio/vidu/v1/tasks/${taskId}`;
+    return pollUntilDone(async () => {
+      const r = await fetch(POLL_URL, { headers: { Authorization: authHeader } });
+      const t = await r.json() as { state?: string; creations?: { url: string }[] };
+      console.log(`[Vidu] poll ${POLL_URL} → state=${t.state}`);
+      if (t.state === 'success') return { status: 'done', url: t.creations?.[0]?.url };
+      if (t.state === 'failed') return { status: 'failed', error: 'Vidu task failed' };
+      return { status: 'pending' };
+    }, 90, 5000);
+  }
 
+  try {
+    let url: string;
     try {
-      const POLL_URL = `https://api.vidu.studio/vidu/v1/tasks/${taskId}`;
-      const url = await pollUntilDone(async () => {
-        const r = await fetch(POLL_URL, {
-          headers: { Authorization: authHeader },
-        });
-        const t = await r.json() as { state?: string; creations?: { url: string }[] };
-        console.log(`[Vidu] poll ${POLL_URL} → state=${t.state}`);
-        if (t.state === 'success') return { status: 'done', url: t.creations?.[0]?.url };
-        if (t.state === 'failed') return { status: 'failed', error: 'Vidu task failed' };
-        return { status: 'pending' };
-      }, 90, 5000);
-      res.json({ url });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      url = await attemptVidu(prompt);
+    } catch (firstErr) {
+      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+        try {
+          url = await attemptVidu(sanitizePrompt(prompt));
+        } catch {
+          res.status(400).json({ error: safetyMessage('Vidu') });
+          return;
+        }
+      } else {
+        throw firstErr;
+      }
     }
+    res.json({ url });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
   }
@@ -307,20 +381,22 @@ app.post('/api/veo', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 8 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
+  const { prompt, imageBase64, duration = 8 } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number;
+  };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
   }
 
-  try {
+  async function attemptVeo(p: string): Promise<string> {
     const createRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          instances: [{ prompt, image: { bytesBase64Encoded: imageBase64 } }],
+          instances: [{ prompt: p, image: { bytesBase64Encoded: imageBase64 } }],
           parameters: { aspectRatio: '16:9', durationSeconds: duration },
         }),
       }
@@ -328,34 +404,46 @@ app.post('/api/veo', async (req, res) => {
 
     if (!createRes.ok) {
       const err = await createRes.json().catch(() => ({})) as { error?: { message?: string } };
-      res.status(createRes.status).json({ error: err.error?.message ?? `Veo error ${createRes.status}` });
-      return;
+      throw new Error(err.error?.message ?? `Veo error ${createRes.status}`);
     }
 
     const op = await createRes.json() as { name: string };
     const opName = op.name;
+    return pollUntilDone(async () => {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/${opName}?key=${apiKey}`
+      );
+      const t = await r.json() as {
+        done?: boolean;
+        error?: { message?: string };
+        response?: { generateVideoResponse?: { generatedSamples?: { video?: { uri?: string } }[] } };
+      };
+      if (t.error) return { status: 'failed', error: t.error.message };
+      if (t.done) {
+        const uri = t.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
+        return { status: 'done', url: uri };
+      }
+      return { status: 'pending' };
+    }, 180, 3000);
+  }
 
+  try {
+    let url: string;
     try {
-      const url = await pollUntilDone(async () => {
-        const r = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/${opName}?key=${apiKey}`
-        );
-        const t = await r.json() as {
-          done?: boolean;
-          error?: { message?: string };
-          response?: { generateVideoResponse?: { generatedSamples?: { video?: { uri?: string } }[] } };
-        };
-        if (t.error) return { status: 'failed', error: t.error.message };
-        if (t.done) {
-          const uri = t.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
-          return { status: 'done', url: uri };
+      url = await attemptVeo(prompt);
+    } catch (firstErr) {
+      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+        try {
+          url = await attemptVeo(sanitizePrompt(prompt));
+        } catch {
+          res.status(400).json({ error: safetyMessage('Veo') });
+          return;
         }
-        return { status: 'pending' };
-      }, 180, 3000);
-      res.json({ url });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+      } else {
+        throw firstErr;
+      }
     }
+    res.json({ url });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
   }

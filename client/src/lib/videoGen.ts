@@ -49,6 +49,18 @@ async function throwOnError(res: Response, label: string): Promise<void> {
   }
 }
 
+function wrapPrompt(prompt: string): string {
+  return (
+    'Cinematic video clip. Consistent characters throughout — do not change facial features, ' +
+    'skin tone, body proportions, or clothing between frames. No morphing, distortion, or ' +
+    'character drift. Smooth natural motion only — no static frames, no frozen imagery, no ' +
+    'slideshow effect. Keep all characters exactly as shown in the reference image.' +
+    `\n\n${prompt}\n\n` +
+    'Negative: static image, frozen frame, slideshow, morphing faces, distorted features, ' +
+    'extra limbs, extra characters, character inconsistency, blurry faces, low quality, watermark.'
+  );
+}
+
 export async function generateWithRunway(
   imageSource: string,
   prompt: string,
@@ -59,7 +71,7 @@ export async function generateWithRunway(
   const res = await fetch('/api/runway', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-runway-key': apiKey },
-    body: JSON.stringify({ prompt, imageBase64: base64, duration }),
+    body: JSON.stringify({ prompt: wrapPrompt(prompt), imageBase64: base64, duration }),
   });
   await throwOnError(res, 'Runway');
   const data = await res.json() as { url: string };
@@ -81,7 +93,7 @@ export async function generateWithKling(
       'x-kling-access': accessKey,
       'x-kling-secret': secretKey,
     },
-    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64), duration }),
+    body: JSON.stringify({ prompt: wrapPrompt(prompt), imageBase64: stripPrefix(base64), duration }),
   });
   await throwOnError(res, 'Kling');
   const data = await res.json() as { url: string };
@@ -98,7 +110,7 @@ export async function generateWithVidu(
   const res = await fetch('/api/vidu', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-vidu-key': apiKey },
-    body: JSON.stringify({ prompt, imageBase64: base64, duration }),
+    body: JSON.stringify({ prompt: wrapPrompt(prompt), imageBase64: base64, duration }),
   });
   await throwOnError(res, 'Vidu');
   const data = await res.json() as { url: string };
@@ -115,7 +127,7 @@ export async function generateWithVeo(
   const res = await fetch('/api/veo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-gemini-key': apiKey },
-    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64), duration }),
+    body: JSON.stringify({ prompt: wrapPrompt(prompt), imageBase64: stripPrefix(base64), duration }),
   });
   await throwOnError(res, 'Veo');
   const data = await res.json() as { url: string };
