@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import RunwayML from '@runwayml/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -13,7 +12,7 @@ app.use(express.json({ limit: '15mb' }));
 async function pollUntilDone(
   pollFn: () => Promise<{ status: string; url?: string; error?: string }>,
   maxAttempts = 90,
-  delayMs = 2000
+  delayMs = 5000
 ): Promise<string> {
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise((r) => setTimeout(r, delayMs));
@@ -76,6 +75,83 @@ function safetyMessage(provider: string): string {
   return `This scene's prompt was flagged by ${provider}'s safety system. Please edit the scene description and try again.`;
 }
 
+// ── KIE AI shared helpers ──────────────────────────────────────────────────────
+
+type KieCreateBody = Record<string, unknown>;
+
+interface KieCreateResponse {
+  code?: number;
+  message?: string;
+  data?: { taskId?: string; task_id?: string; id?: string } & Record<string, unknown>;
+  taskId?: string;
+  task_id?: string;
+}
+
+interface KiePollResponse {
+  code?: number;
+  message?: string;
+  data?: {
+    status?: string;
+    videoUrl?: string;
+    video_url?: string;
+    failReason?: string;
+  };
+}
+
+async function kieCreate(
+  url: string,
+  headers: Record<string, string>,
+  body: KieCreateBody,
+  label: string
+): Promise<string> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const raw = await res.text();
+  console.log(`[${label}] create status=${res.status} body=${raw}`);
+
+  let parsed: KieCreateResponse;
+  try { parsed = JSON.parse(raw); }
+  catch { throw new Error(`${label} error ${res.status}: ${raw}`); }
+
+  if (!res.ok || (parsed.code !== undefined && parsed.code !== 200 && parsed.code !== 0)) {
+    throw new Error(parsed.message ?? `${label} error ${res.status}`);
+  }
+
+  const taskId =
+    parsed.data?.taskId ?? parsed.data?.task_id ?? parsed.data?.id ??
+    parsed.taskId ?? parsed.task_id;
+  if (!taskId) throw new Error(`${label} did not return a task ID. Response: ${raw}`);
+
+  console.log(`[${label}] taskId=${taskId}`);
+  return taskId;
+}
+
+function kiePoll(
+  queryUrl: string,
+  headers: Record<string, string>,
+  label: string
+): () => Promise<{ status: string; url?: string; error?: string }> {
+  return async () => {
+    const r = await fetch(queryUrl, { headers });
+    const body = await r.json() as KiePollResponse;
+    const data = body.data ?? {};
+    const st = (data.status ?? '').toLowerCase();
+    const url = data.videoUrl ?? data.video_url;
+    console.log(`[${label}] poll status=${st} url=${url ?? '(none)'}`);
+
+    if (st === 'succeeded' || st === 'completed' || st === 'success') {
+      return { status: 'done', url };
+    }
+    if (st === 'failed' || st === 'error') {
+      return { status: 'failed', error: data.failReason ?? body.message ?? `${label} task failed` };
+    }
+    return { status: 'pending' };
+  };
+}
+
 // ── Replicate proxy ──────────────────────────────────────────────────────────
 app.post('/api/replicate', async (req, res) => {
   const apiKey = req.headers['x-replicate-key'];
@@ -133,7 +209,7 @@ app.post('/api/replicate', async (req, res) => {
         if (p.status === 'succeeded') return { status: 'done', url: extractUrl(p.output) ?? undefined };
         if (p.status === 'failed' || p.status === 'canceled') return { status: 'failed', error: p.error };
         return { status: 'pending' };
-      });
+      }, 90, 2000);
       res.json({ url });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
@@ -143,11 +219,11 @@ app.post('/api/replicate', async (req, res) => {
   }
 });
 
-// ── Runway proxy ─────────────────────────────────────────────────────────────
+// ── KIE Runway proxy ──────────────────────────────────────────────────────────
 app.post('/api/runway', async (req, res) => {
-  const apiKey = req.headers['x-runway-key'];
-  if (!apiKey || typeof apiKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-runway-key header' });
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' });
     return;
   }
 
@@ -159,27 +235,19 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
-  async function attemptRunway(p: string): Promise<string> {
-    const client = new RunwayML({ apiKey: apiKey as string });
-    const imageToVideo = await client.imageToVideo.create({
-      model: 'gen4_turbo',
-      promptImage: imageBase64 as string,
-      promptText: p,
-      duration: duration as 5 | 10,
-      ratio: '1280:720',
-    });
+  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+  const model = duration === 10 ? 'runway-duration-10-generate' : 'runway-duration-5-generate';
 
-    let task = await client.tasks.retrieve(imageToVideo.id);
-    let attempts = 0;
-    while (task.status !== 'SUCCEEDED' && task.status !== 'FAILED') {
-      if (++attempts > 90) throw new Error('Request timed out after 450 seconds');
-      await new Promise((r) => setTimeout(r, 5000));
-      task = await client.tasks.retrieve(imageToVideo.id);
-    }
-    if (task.status === 'FAILED') throw new Error(task.failure ?? 'Runway generation failed');
-    const url = task.output?.[0] ?? null;
-    if (!url) throw new Error('No output URL returned');
-    return url;
+  async function attemptRunway(p: string): Promise<string> {
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/runway/generate',
+      kieHeaders,
+      { prompt: p, imageUrl: imageBase64, model, waterMark: 'MAISuite Flow' },
+      'Runway'
+    );
+    return pollUntilDone(
+      kiePoll(`https://api.kie.ai/api/v1/runway/query/${taskId}`, kieHeaders, 'Runway')
+    );
   }
 
   try {
@@ -188,12 +256,8 @@ app.post('/api/runway', async (req, res) => {
       url = await attemptRunway(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try {
-          url = await attemptRunway(wrapPrompt(sanitizePrompt(prompt)));
-        } catch {
-          res.status(400).json({ error: safetyMessage('Runway') });
-          return;
-        }
+        try { url = await attemptRunway(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Runway') }); return; }
       } else { throw firstErr; }
     }
     res.json({ url });
@@ -202,11 +266,11 @@ app.post('/api/runway', async (req, res) => {
   }
 });
 
-// ── Kling proxy (fal.ai Kling 3.0) ──────────────────────────────────────────
+// ── KIE Kling proxy ───────────────────────────────────────────────────────────
 app.post('/api/kling', async (req, res) => {
-  const apiKey = req.headers['x-fal-key'];
-  if (!apiKey || typeof apiKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-fal-key header' });
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' });
     return;
   }
 
@@ -218,61 +282,25 @@ app.post('/api/kling', async (req, res) => {
     return;
   }
 
-  const FAL_ENDPOINT = 'fal-ai/kling-video/v3/image-to-video';
-  const falHeaders = { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' };
-
-  console.log(`[Kling/fal] endpoint=${FAL_ENDPOINT} duration=${duration} audio=${audioEnabled}`);
-  console.log(`[Kling/fal] key=${apiKey.slice(0, 8)}… (len=${apiKey.length})`);
+  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+  console.log(`[Kling/KIE] duration=${duration} audio=${audioEnabled}`);
 
   async function attemptKling(p: string): Promise<string> {
-    const submitRes = await fetch(`https://queue.fal.run/${FAL_ENDPOINT}`, {
-      method: 'POST',
-      headers: falHeaders,
-      body: JSON.stringify({
-        image_url: imageBase64,
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/kling/v2.1/image-to-video',
+      kieHeaders,
+      {
         prompt: p,
+        imageUrl: imageBase64,
         duration: String(duration),
-        aspect_ratio: '16:9',
-        motion_has_audio: audioEnabled,
-      }),
-    });
-
-    const submitBody = await submitRes.text();
-    console.log(`[Kling/fal] submit status=${submitRes.status} body=${submitBody}`);
-
-    if (!submitRes.ok) {
-      let msg: string;
-      try { msg = (JSON.parse(submitBody) as { detail?: string; error?: string }).detail ?? (JSON.parse(submitBody) as { error?: string }).error ?? `Kling error ${submitRes.status}`; }
-      catch { msg = `Kling error ${submitRes.status}: ${submitBody}`; }
-      throw new Error(msg);
-    }
-
-    const { request_id } = JSON.parse(submitBody) as { request_id: string };
-    if (!request_id) throw new Error('fal.ai did not return a request_id');
-
-    console.log(`[Kling/fal] request_id=${request_id}`);
-
-    return pollUntilDone(async () => {
-      const statusRes = await fetch(
-        `https://queue.fal.run/${FAL_ENDPOINT}/requests/${request_id}/status`,
-        { headers: falHeaders }
-      );
-      const s = await statusRes.json() as { status: string; error?: string };
-      console.log(`[Kling/fal] poll status=${s.status}`);
-
-      if (s.status === 'COMPLETED') {
-        const resultRes = await fetch(
-          `https://queue.fal.run/${FAL_ENDPOINT}/requests/${request_id}`,
-          { headers: falHeaders }
-        );
-        const data = await resultRes.json() as { video?: { url: string } };
-        return { status: 'done', url: data.video?.url };
-      }
-      if (s.status === 'FAILED' || s.status === 'ERROR') {
-        return { status: 'failed', error: s.error ?? 'Kling generation failed' };
-      }
-      return { status: 'pending' };
-    }, 90, 5000);
+        aspectRatio: '16:9',
+        modelName: 'kling-v2.1',
+      },
+      'Kling'
+    );
+    return pollUntilDone(
+      kiePoll(`https://api.kie.ai/api/v1/kling/query/${taskId}`, kieHeaders, 'Kling')
+    );
   }
 
   try {
@@ -281,12 +309,8 @@ app.post('/api/kling', async (req, res) => {
       url = await attemptKling(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try {
-          url = await attemptKling(wrapPrompt(sanitizePrompt(prompt)));
-        } catch {
-          res.status(400).json({ error: safetyMessage('Kling') });
-          return;
-        }
+        try { url = await attemptKling(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Kling') }); return; }
       } else { throw firstErr; }
     }
     res.json({ url });
@@ -295,11 +319,11 @@ app.post('/api/kling', async (req, res) => {
   }
 });
 
-// ── Vidu proxy ───────────────────────────────────────────────────────────────
+// ── KIE Vidu proxy ────────────────────────────────────────────────────────────
 app.post('/api/vidu', async (req, res) => {
-  const apiKey = req.headers['x-vidu-key'];
-  if (!apiKey || typeof apiKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-vidu-key header' });
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' });
     return;
   }
 
@@ -311,57 +335,18 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
-  const CREATE_URL = 'https://api.vidu.studio/vidu/v1/tasks';
-  const authHeader = `Token ${apiKey}`;
-  const viduHeaders = { 'Content-Type': 'application/json', Authorization: authHeader };
-
-  console.log(`[Vidu] POST ${CREATE_URL}`);
-  console.log(`[Vidu] Authorization: Token ${apiKey.slice(0, 8)}… (len=${apiKey.length})`);
-  console.log(`[Vidu] duration=${duration} imageBase64 prefix="${imageBase64.slice(0, 30)}…"`);
+  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
 
   async function attemptVidu(p: string): Promise<string> {
-    const createRes = await fetch(CREATE_URL, {
-      method: 'POST',
-      headers: viduHeaders,
-      body: JSON.stringify({
-        type: 'img2video',
-        model: 'vidu-2.0',
-        input: {
-          enhance: true,
-          seed: 0,
-          prompts: [
-            { type: 'image', data: imageBase64 },
-            { type: 'text', data: p },
-          ],
-        },
-        output_params: { sample_count: 1, duration },
-      }),
-    });
-
-    const createBody = await createRes.text();
-    console.log(`[Vidu] create status=${createRes.status} body=${createBody}`);
-
-    if (!createRes.ok) {
-      let errMsg: string;
-      try { errMsg = (JSON.parse(createBody) as { message?: string }).message ?? `Vidu error ${createRes.status}: ${createBody}`; }
-      catch { errMsg = `Vidu error ${createRes.status}: ${createBody}`; }
-      throw new Error(errMsg);
-    }
-
-    const task = JSON.parse(createBody) as { id?: string; task_id?: string };
-    const taskId = task.id ?? task.task_id;
-    if (!taskId) throw new Error(`Vidu did not return a task ID. Response: ${createBody}`);
-
-    console.log(`[Vidu] task created id=${taskId}`);
-    const POLL_URL = `https://api.vidu.studio/vidu/v1/tasks/${taskId}`;
-    return pollUntilDone(async () => {
-      const r = await fetch(POLL_URL, { headers: { Authorization: authHeader } });
-      const t = await r.json() as { state?: string; creations?: { url: string }[] };
-      console.log(`[Vidu] poll ${POLL_URL} → state=${t.state}`);
-      if (t.state === 'success') return { status: 'done', url: t.creations?.[0]?.url };
-      if (t.state === 'failed') return { status: 'failed', error: 'Vidu task failed' };
-      return { status: 'pending' };
-    }, 90, 5000);
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/vidu/generate',
+      kieHeaders,
+      { prompt: p, imageUrl: imageBase64, duration, aspectRatio: '16:9' },
+      'Vidu'
+    );
+    return pollUntilDone(
+      kiePoll(`https://api.kie.ai/api/v1/vidu/query/${taskId}`, kieHeaders, 'Vidu')
+    );
   }
 
   try {
@@ -370,12 +355,8 @@ app.post('/api/vidu', async (req, res) => {
       url = await attemptVidu(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try {
-          url = await attemptVidu(wrapPrompt(sanitizePrompt(prompt)));
-        } catch {
-          res.status(400).json({ error: safetyMessage('Vidu') });
-          return;
-        }
+        try { url = await attemptVidu(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Vidu') }); return; }
       } else { throw firstErr; }
     }
     res.json({ url });
@@ -384,15 +365,15 @@ app.post('/api/vidu', async (req, res) => {
   }
 });
 
-// ── Veo proxy ─────────────────────────────────────────────────────────────────
+// ── KIE Veo proxy ─────────────────────────────────────────────────────────────
 app.post('/api/veo', async (req, res) => {
-  const apiKey = req.headers['x-gemini-key'];
-  if (!apiKey || typeof apiKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-gemini-key header' });
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' });
     return;
   }
 
-  const { prompt, imageBase64, duration = 8 } = req.body as {
+  const { prompt, imageBase64 } = req.body as {
     prompt?: string; imageBase64?: string; duration?: number;
   };
   if (!prompt || !imageBase64) {
@@ -400,42 +381,24 @@ app.post('/api/veo', async (req, res) => {
     return;
   }
 
+  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
   async function attemptVeo(p: string): Promise<string> {
-    const createRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/veo-2.0-generate-001:predictLongRunning?key=${apiKey}`,
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/veo/generate',
+      kieHeaders,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt: p, image: { bytesBase64Encoded: imageBase64 } }],
-          parameters: { aspectRatio: '16:9', durationSeconds: duration },
-        }),
-      }
+        prompt: p,
+        imageUrls: [imageBase64],
+        model: 'veo3_fast',
+        aspect_ratio: '16:9',
+        generationType: 'REFERENCE_2_VIDEO',
+      },
+      'Veo'
     );
-
-    if (!createRes.ok) {
-      const err = await createRes.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(err.error?.message ?? `Veo error ${createRes.status}`);
-    }
-
-    const op = await createRes.json() as { name: string };
-    const opName = op.name;
-    return pollUntilDone(async () => {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/${opName}?key=${apiKey}`
-      );
-      const t = await r.json() as {
-        done?: boolean;
-        error?: { message?: string };
-        response?: { generateVideoResponse?: { generatedSamples?: { video?: { uri?: string } }[] } };
-      };
-      if (t.error) return { status: 'failed', error: t.error.message };
-      if (t.done) {
-        const uri = t.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
-        return { status: 'done', url: uri };
-      }
-      return { status: 'pending' };
-    }, 180, 3000);
+    return pollUntilDone(
+      kiePoll(`https://api.kie.ai/api/v1/veo/query/${taskId}`, kieHeaders, 'Veo')
+    );
   }
 
   try {
@@ -444,12 +407,8 @@ app.post('/api/veo', async (req, res) => {
       url = await attemptVeo(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try {
-          url = await attemptVeo(wrapPrompt(sanitizePrompt(prompt)));
-        } catch {
-          res.status(400).json({ error: safetyMessage('Veo') });
-          return;
-        }
+        try { url = await attemptVeo(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Veo') }); return; }
       } else { throw firstErr; }
     }
     res.json({ url });
@@ -470,3 +429,6 @@ const PORT = Number(process.env.PORT) || 3001;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+// suppress unused-import warning for crypto (used by old Kling JWT, kept for potential future use)
+void crypto;

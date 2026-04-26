@@ -1,10 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { SceneAnalysis } from '../types';
 import {
-  getStoredRunwayKey,
-  getStoredFalKey,
-  getStoredViduKey,
-  getStoredGeminiKey,
+  getStoredKieKey,
   generateWithRunway,
   generateWithKling,
   generateWithVidu,
@@ -21,9 +18,9 @@ interface VideoState {
 
 const PROVIDERS: { id: Provider; label: string }[] = [
   { id: 'runway', label: 'Runway Gen-4' },
-  { id: 'kling',  label: 'Kling 3.0'   },
+  { id: 'kling',  label: 'Kling 2.1'   },
   { id: 'vidu',   label: 'Vidu 2.0'   },
-  { id: 'veo',    label: 'Veo 2'      },
+  { id: 'veo',    label: 'Veo 3'      },
 ];
 
 const DURATION_OPTIONS: Record<Provider, number[]> = {
@@ -56,13 +53,6 @@ async function downloadVideo(url: string, sceneNum: number) {
   }
 }
 
-function providerKeyName(p: Provider): string {
-  if (p === 'runway') return 'Runway';
-  if (p === 'kling') return 'fal.ai';
-  if (p === 'vidu') return 'Vidu';
-  return 'Gemini (Veo)';
-}
-
 interface Props {
   scenes: SceneAnalysis[];
   generatedImages: Record<number, string>;
@@ -76,16 +66,8 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
 
-  const runwayKey = getStoredRunwayKey();
-  const falKey    = getStoredFalKey();
-  const viduKey   = getStoredViduKey();
-  const geminiKey = getStoredGeminiKey();
-
-  const hasKey =
-    provider === 'runway' ? !!runwayKey :
-    provider === 'kling'  ? !!falKey    :
-    provider === 'vidu'   ? !!viduKey   :
-    !!geminiKey;
+  const kieKey = getStoredKieKey();
+  const hasKey = !!kieKey;
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p);
@@ -109,13 +91,13 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       const prompt = buildPrompt(scene);
       let url: string;
       if (provider === 'runway') {
-        url = await generateWithRunway(imageSource, prompt, runwayKey, duration);
+        url = await generateWithRunway(imageSource, prompt, kieKey, duration);
       } else if (provider === 'kling') {
-        url = await generateWithKling(imageSource, prompt, falKey, duration, audioEnabled);
+        url = await generateWithKling(imageSource, prompt, kieKey, duration, audioEnabled);
       } else if (provider === 'vidu') {
-        url = await generateWithVidu(imageSource, prompt, viduKey, duration);
+        url = await generateWithVidu(imageSource, prompt, kieKey, duration);
       } else {
-        url = await generateWithVeo(imageSource, prompt, geminiKey, duration);
+        url = await generateWithVeo(imageSource, prompt, kieKey, duration);
       }
       setVideoState(scene.scene, { url, loading: false });
     } catch (err) {
@@ -124,7 +106,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Video generation failed',
       });
     }
-  }, [provider, duration, audioEnabled, runwayKey, falKey, viduKey, geminiKey, hasKey, generatedImages, setVideoState]);
+  }, [provider, duration, audioEnabled, kieKey, hasKey, generatedImages, setVideoState]);
 
   const generateAll = useCallback(async () => {
     if (!hasKey || generatingAll) return;
@@ -233,8 +215,15 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         <div className="vidgen-missing-key">
           <span className="vidgen-missing-icon">⚠</span>
           <span>
-            No <strong>{providerKeyName(provider)}</strong> API key found. Click the{' '}
-            <strong>⚙ API Key</strong> button in the header to add it.
+            Add your <strong>KIE AI API key</strong> in settings to generate videos.{' '}
+            <a
+              href="https://kie.ai/dashboard/keys"
+              target="_blank"
+              rel="noreferrer"
+              className="vidgen-notice-link"
+            >
+              Get one at kie.ai ↗
+            </a>
           </span>
         </div>
       )}
@@ -351,7 +340,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-empty-state vidgen-empty-state--warn">
                       <span className="vidgen-empty-icon">⚠</span>
                       <p className="vidgen-empty-text">
-                        Add a <strong>{providerKeyName(provider)}</strong> key to generate clips
+                        Add your <strong>KIE AI API key</strong> in settings to generate clips
                       </p>
                     </div>
                   )}
@@ -362,9 +351,9 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         })}
       </div>
 
-      {/* ── Veo audio banner ── */}
+      {/* ── Audio providers note ── */}
       <div className="vidgen-audio-banner">
-        🎙️ Want clips with dialogue and audio? Use <strong>Google Veo</strong> or <strong>Kling 3.0</strong> — both generate native audio. Add your API keys in settings to unlock them.
+        🎙️ <strong>Veo 3</strong> and <strong>Kling 2.1</strong> generate native audio — dialogue, ambient sound, and music. Both are powered by your KIE AI key.
       </div>
     </div>
   );

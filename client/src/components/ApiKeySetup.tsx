@@ -6,16 +6,7 @@ import {
   getStoredReplicateKey,
   saveReplicateKey,
 } from '../lib/imageGen';
-import {
-  getStoredRunwayKey,
-  saveRunwayKey,
-  getStoredFalKey,
-  saveFalKey,
-  getStoredViduKey,
-  saveViduKey,
-  getStoredGeminiKey,
-  saveGeminiKey,
-} from '../lib/videoGen';
+import { getStoredKieKey, saveKieKey } from '../lib/videoGen';
 
 interface Props {
   onSave: (key: string) => void;
@@ -32,17 +23,8 @@ export default function ApiKeySetup({ onSave }: Props) {
   const [replicateKey, setReplicateKey] = useState(getStoredReplicateKey);
   const [showReplicate, setShowReplicate] = useState(false);
 
-  const [runwayKey, setRunwayKey] = useState(getStoredRunwayKey);
-  const [showRunway, setShowRunway] = useState(false);
-
-  const [falKey, setFalKey] = useState(getStoredFalKey);
-  const [showFal, setShowFal] = useState(false);
-
-  const [viduKey, setViduKey] = useState(getStoredViduKey);
-  const [showVidu, setShowVidu] = useState(false);
-
-  const [geminiKey, setGeminiKey] = useState(getStoredGeminiKey);
-  const [showGemini, setShowGemini] = useState(false);
+  const [kieKey, setKieKey] = useState(getStoredKieKey);
+  const [showKie, setShowKie] = useState(false);
 
   const handleSave = () => {
     const trimmed = key.trim();
@@ -57,10 +39,7 @@ export default function ApiKeySetup({ onSave }: Props) {
     saveApiKey(trimmed);
     if (openaiKey.trim()) saveOpenAIKey(openaiKey);
     if (replicateKey.trim()) saveReplicateKey(replicateKey);
-    if (runwayKey.trim()) saveRunwayKey(runwayKey);
-    if (falKey.trim()) saveFalKey(falKey);
-    if (viduKey.trim()) saveViduKey(viduKey);
-    if (geminiKey.trim()) saveGeminiKey(geminiKey);
+    if (kieKey.trim()) saveKieKey(kieKey);
     onSave(trimmed);
   };
 
@@ -162,95 +141,26 @@ export default function ApiKeySetup({ onSave }: Props) {
           <span>Optional — for Video Generation</span>
         </div>
 
-        {/* ── Runway (optional) ── */}
+        {/* ── KIE AI (optional) ── */}
         <p className="apikey-field-label">
-          Runway API Key <span className="apikey-optional">for Gen-4 video</span>
+          KIE AI API Key <span className="apikey-optional">for all video generation</span>
         </p>
         <div className="apikey-input-wrap">
           <input
             className="apikey-input"
-            type={showRunway ? 'text' : 'password'}
-            placeholder="key_..."
-            value={runwayKey}
-            onChange={(e) => setRunwayKey(e.target.value)}
+            type={showKie ? 'text' : 'password'}
+            placeholder="kie_..."
+            value={kieKey}
+            onChange={(e) => setKieKey(e.target.value)}
             spellCheck={false}
           />
-          <button className="apikey-toggle" type="button" onClick={() => setShowRunway((s) => !s)} tabIndex={-1}>
-            {showRunway ? 'Hide' : 'Show'}
+          <button className="apikey-toggle" type="button" onClick={() => setShowKie((s) => !s)} tabIndex={-1}>
+            {showKie ? 'Hide' : 'Show'}
           </button>
         </div>
         <p className="apikey-link-text">
-          <a href="https://app.runwayml.com/settings" target="_blank" rel="noreferrer" className="apikey-link">
-            Get Runway key ↗
-          </a>
-        </p>
-
-        {/* ── fal.ai (optional) ── */}
-        <p className="apikey-field-label">
-          fal.ai API Key <span className="apikey-optional">for Kling 3.0 with audio</span>
-        </p>
-        <div className="apikey-input-wrap">
-          <input
-            className="apikey-input"
-            type={showFal ? 'text' : 'password'}
-            placeholder="fal key..."
-            value={falKey}
-            onChange={(e) => setFalKey(e.target.value)}
-            spellCheck={false}
-          />
-          <button className="apikey-toggle" type="button" onClick={() => setShowFal((s) => !s)} tabIndex={-1}>
-            {showFal ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        <p className="apikey-link-text">
-          <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
-            Get fal.ai key ↗
-          </a>
-        </p>
-
-        {/* ── Vidu (optional) ── */}
-        <p className="apikey-field-label">
-          Vidu API Key <span className="apikey-optional">for Vidu 2.0 video</span>
-        </p>
-        <div className="apikey-input-wrap">
-          <input
-            className="apikey-input"
-            type={showVidu ? 'text' : 'password'}
-            placeholder="vidu_..."
-            value={viduKey}
-            onChange={(e) => setViduKey(e.target.value)}
-            spellCheck={false}
-          />
-          <button className="apikey-toggle" type="button" onClick={() => setShowVidu((s) => !s)} tabIndex={-1}>
-            {showVidu ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        <p className="apikey-link-text">
-          <a href="https://platform.vidu.com" target="_blank" rel="noreferrer" className="apikey-link">
-            Get Vidu key ↗
-          </a>
-        </p>
-
-        {/* ── Google Gemini / Veo (optional) ── */}
-        <p className="apikey-field-label">
-          Google Gemini API Key <span className="apikey-optional">for Veo 2 video</span>
-        </p>
-        <div className="apikey-input-wrap">
-          <input
-            className="apikey-input"
-            type={showGemini ? 'text' : 'password'}
-            placeholder="AIza..."
-            value={geminiKey}
-            onChange={(e) => setGeminiKey(e.target.value)}
-            spellCheck={false}
-          />
-          <button className="apikey-toggle" type="button" onClick={() => setShowGemini((s) => !s)} tabIndex={-1}>
-            {showGemini ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        <p className="apikey-link-text">
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="apikey-link">
-            Get Gemini key ↗
+          <a href="https://kie.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
+            Get KIE AI key ↗
           </a>
         </p>
 
