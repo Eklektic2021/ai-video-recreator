@@ -53,7 +53,12 @@ async function downloadImage(url: string, sceneNum: number) {
   }
 }
 
-export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) {
+interface Props {
+  scenes: SceneAnalysis[];
+  onImageGenerated?: (sceneNum: number, url: string) => void;
+}
+
+export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
   const [provider, setProvider] = useState<Provider>('dalle');
   const [refImages, setRefImages] = useState<string[]>([]);
   const [images, setImages] = useState<Record<number, ImageState>>({});
@@ -97,6 +102,7 @@ export default function ImageGenerator({ scenes }: { scenes: SceneAnalysis[] }) 
             ? await generateWithDalle(key, prompt, refImages)
             : await generateWithFlux(key, prompt, refImages);
         setImageState(scene.scene, { url, loading: false });
+        onImageGenerated?.(scene.scene, url);
       } catch (err) {
         setImageState(scene.scene, {
           loading: false,

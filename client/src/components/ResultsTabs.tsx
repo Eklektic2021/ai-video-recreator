@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   AnalysisResult,
   SceneAnalysis,
@@ -8,6 +8,7 @@ import {
   SFXItem,
 } from '../types';
 import ImageGenerator from './ImageGenerator';
+import VideoGenerator from './VideoGenerator';
 
 interface Props {
   result: AnalysisResult;
@@ -272,6 +273,7 @@ function SFXTable({ items }: { items: SFXItem[] }) {
 const MAIN_TABS = [
   { id: 'scenes', label: 'Scene Analysis' },
   { id: 'images', label: 'Image Gen' },
+  { id: 'videogen', label: 'Video Gen' },
   { id: 'video', label: 'Video Prompts' },
   { id: 'music', label: 'Music Prompts' },
   { id: 'editing', label: 'Editing Guide' },
@@ -283,6 +285,12 @@ type TabId = (typeof MAIN_TABS)[number]['id'];
 
 export default function ResultsTabs({ result, selectedPlatforms }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('scenes');
+  const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
+
+  const handleImageGenerated = useCallback((sceneNum: number, url: string) => {
+    setGeneratedImages((prev) => ({ ...prev, [sceneNum]: url }));
+  }, []);
+
   const [activeVideoTab, setActiveVideoTab] = useState(
     selectedPlatforms.video[0] ?? ''
   );
@@ -386,7 +394,18 @@ export default function ResultsTabs({ result, selectedPlatforms }: Props) {
         )}
 
         {activeTab === 'images' && (
-          <ImageGenerator scenes={result.sceneAnalysis} />
+          <ImageGenerator
+            scenes={result.sceneAnalysis}
+            onImageGenerated={handleImageGenerated}
+          />
+        )}
+
+        {activeTab === 'videogen' && (
+          <VideoGenerator
+            scenes={result.sceneAnalysis}
+            generatedImages={generatedImages}
+            onSwitchToImages={() => setActiveTab('images')}
+          />
         )}
 
         {activeTab === 'video' && (
