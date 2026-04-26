@@ -9,10 +9,8 @@ import {
 import {
   getStoredRunwayKey,
   saveRunwayKey,
-  getStoredKlingAccess,
-  saveKlingAccess,
-  getStoredKlingSecret,
-  saveKlingSecret,
+  getStoredFalKey,
+  saveFalKey,
   getStoredViduKey,
   saveViduKey,
   getStoredGeminiKey,
@@ -37,11 +35,8 @@ export default function ApiKeySetup({ onSave }: Props) {
   const [runwayKey, setRunwayKey] = useState(getStoredRunwayKey);
   const [showRunway, setShowRunway] = useState(false);
 
-  const [klingAccess, setKlingAccess] = useState(getStoredKlingAccess);
-  const [showKlingAccess, setShowKlingAccess] = useState(false);
-
-  const [klingSecret, setKlingSecret] = useState(getStoredKlingSecret);
-  const [showKlingSecret, setShowKlingSecret] = useState(false);
+  const [falKey, setFalKey] = useState(getStoredFalKey);
+  const [showFal, setShowFal] = useState(false);
 
   const [viduKey, setViduKey] = useState(getStoredViduKey);
   const [showVidu, setShowVidu] = useState(false);
@@ -63,8 +58,7 @@ export default function ApiKeySetup({ onSave }: Props) {
     if (openaiKey.trim()) saveOpenAIKey(openaiKey);
     if (replicateKey.trim()) saveReplicateKey(replicateKey);
     if (runwayKey.trim()) saveRunwayKey(runwayKey);
-    if (klingAccess.trim()) saveKlingAccess(klingAccess);
-    if (klingSecret.trim()) saveKlingSecret(klingSecret);
+    if (falKey.trim()) saveFalKey(falKey);
     if (viduKey.trim()) saveViduKey(viduKey);
     if (geminiKey.trim()) saveGeminiKey(geminiKey);
     onSave(trimmed);
@@ -191,44 +185,26 @@ export default function ApiKeySetup({ onSave }: Props) {
           </a>
         </p>
 
-        {/* ── Kling Access Key (optional) ── */}
+        {/* ── fal.ai (optional) ── */}
         <p className="apikey-field-label">
-          Kling Access Key <span className="apikey-optional">for Kling AI video</span>
+          fal.ai API Key <span className="apikey-optional">for Kling 3.0 with audio</span>
         </p>
         <div className="apikey-input-wrap">
           <input
             className="apikey-input"
-            type={showKlingAccess ? 'text' : 'password'}
-            placeholder="Access key..."
-            value={klingAccess}
-            onChange={(e) => setKlingAccess(e.target.value)}
+            type={showFal ? 'text' : 'password'}
+            placeholder="fal key..."
+            value={falKey}
+            onChange={(e) => setFalKey(e.target.value)}
             spellCheck={false}
           />
-          <button className="apikey-toggle" type="button" onClick={() => setShowKlingAccess((s) => !s)} tabIndex={-1}>
-            {showKlingAccess ? 'Hide' : 'Show'}
-          </button>
-        </div>
-
-        {/* ── Kling Secret Key (optional) ── */}
-        <p className="apikey-field-label">
-          Kling Secret Key <span className="apikey-optional">for Kling AI video</span>
-        </p>
-        <div className="apikey-input-wrap">
-          <input
-            className="apikey-input"
-            type={showKlingSecret ? 'text' : 'password'}
-            placeholder="Secret key..."
-            value={klingSecret}
-            onChange={(e) => setKlingSecret(e.target.value)}
-            spellCheck={false}
-          />
-          <button className="apikey-toggle" type="button" onClick={() => setShowKlingSecret((s) => !s)} tabIndex={-1}>
-            {showKlingSecret ? 'Hide' : 'Show'}
+          <button className="apikey-toggle" type="button" onClick={() => setShowFal((s) => !s)} tabIndex={-1}>
+            {showFal ? 'Hide' : 'Show'}
           </button>
         </div>
         <p className="apikey-link-text">
-          <a href="https://klingai.com/dev" target="_blank" rel="noreferrer" className="apikey-link">
-            Get Kling keys ↗
+          <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
+            Get fal.ai key ↗
           </a>
         </p>
 

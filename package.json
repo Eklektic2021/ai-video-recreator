@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.55.0",
+    "@fal-ai/client": "^1.10.0",
     "@runwayml/sdk": "^3.20.0",
     "express": "^5.2.1",
     "firebase": "^12.12.1",

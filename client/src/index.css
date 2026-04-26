@@ -2352,3 +2352,65 @@ body.light-mode {
   color: #555;
 }
 
+/* ── Kling audio toggle ── */
+.vidgen-audio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+}
+.vidgen-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+}
+.vidgen-toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.vidgen-toggle-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+.vidgen-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition: transform 0.2s, background 0.2s;
+}
+.vidgen-toggle-input:checked ~ .vidgen-toggle-track { background: rgba(0,217,255,0.15); border-color: var(--cyan); }
+.vidgen-toggle-input:checked ~ .vidgen-toggle-track .vidgen-toggle-thumb { transform: translateX(16px); background: var(--cyan); }
+.vidgen-audio-text { font-size: 0.83rem; color: var(--text-2); font-weight: 500; }
+.vidgen-audio-note { font-size: 0.73rem; color: var(--text-3); margin: 0; padding-left: 44px; }
+.vidgen-scene-audio-badge {
+  font-size: 0.68rem;
+  color: var(--cyan);
+  background: rgba(0,217,255,0.1);
+  border: 1px solid rgba(0,217,255,0.2);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.light-mode .vidgen-toggle-track { background: #e8e8e8; border-color: rgba(0,0,0,0.18); }
+.light-mode .vidgen-toggle-thumb { background: #aaa; }
+.light-mode .vidgen-toggle-input:checked ~ .vidgen-toggle-track { background: rgba(0,100,220,0.1); border-color: #0064dc; }
+.light-mode .vidgen-toggle-input:checked ~ .vidgen-toggle-track .vidgen-toggle-thumb { background: #0064dc; }
+.light-mode .vidgen-audio-text { color: #444; }
+.light-mode .vidgen-audio-note { color: #888; }
+.light-mode .vidgen-scene-audio-badge { background: rgba(0,100,220,0.08); border-color: rgba(0,100,220,0.25); color: #0064dc; }
+

@@ -27,6 +27,18 @@ async function pollUntilDone(
   throw new Error('Request timed out');
 }
 
+function wrapPrompt(raw: string): string {
+  return (
+    'Cinematic video clip. Consistent characters throughout — do not change facial features, ' +
+    'skin tone, body proportions, or clothing between frames. No morphing, distortion, or ' +
+    'character drift. Smooth natural motion only — no static frames, no frozen imagery, no ' +
+    'slideshow effect. Keep all characters exactly as shown in the reference image.' +
+    `\n\n${raw}\n\n` +
+    'Negative: static image, frozen frame, slideshow, morphing faces, distorted features, ' +
+    'extra limbs, extra characters, character inconsistency, blurry faces, low quality, watermark.'
+  );
+}
+
 const SAFETY_KEYWORDS = [
   'content policy', 'safety', 'flagged', 'violat', 'moderat',
   'inappropriate', 'nsfw', 'harmful', 'blocked', 'prohibited',
@@ -164,7 +176,6 @@ app.post('/api/runway', async (req, res) => {
       await new Promise((r) => setTimeout(r, 5000));
       task = await client.tasks.retrieve(imageToVideo.id);
     }
-
     if (task.status === 'FAILED') throw new Error(task.failure ?? 'Runway generation failed');
     const url = task.output?.[0] ?? null;
     if (!url) throw new Error('No output URL returned');
@@ -174,18 +185,16 @@ app.post('/api/runway', async (req, res) => {
   try {
     let url: string;
     try {
-      url = await attemptRunway(prompt);
+      url = await attemptRunway(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
         try {
-          url = await attemptRunway(sanitizePrompt(prompt));
+          url = await attemptRunway(wrapPrompt(sanitizePrompt(prompt)));
         } catch {
           res.status(400).json({ error: safetyMessage('Runway') });
           return;
         }
-      } else {
-        throw firstErr;
-      }
+      } else { throw firstErr; }
     }
     res.json({ url });
   } catch (err) {
@@ -193,88 +202,92 @@ app.post('/api/runway', async (req, res) => {
   }
 });
 
-// ── Kling proxy ──────────────────────────────────────────────────────────────
-function generateKlingJWT(accessKey: string, secretKey: string): string {
-  const now = Math.floor(Date.now() / 1000);
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ iss: accessKey, exp: now + 1800, nbf: now - 5 })).toString('base64url');
-  const data = `${header}.${payload}`;
-  const sig = crypto.createHmac('sha256', secretKey).update(data).digest('base64url');
-  return `${data}.${sig}`;
-}
-
+// ── Kling proxy (fal.ai Kling 3.0) ──────────────────────────────────────────
 app.post('/api/kling', async (req, res) => {
-  const accessKey = req.headers['x-kling-access'];
-  const secretKey = req.headers['x-kling-secret'];
-  if (!accessKey || typeof accessKey !== 'string' || !secretKey || typeof secretKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kling-access or x-kling-secret headers' });
+  const apiKey = req.headers['x-fal-key'];
+  if (!apiKey || typeof apiKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-fal-key header' });
     return;
   }
 
-  const { prompt, imageBase64, duration = 5 } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number;
+  const { prompt, imageBase64, duration = 5, audioEnabled = false } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; audioEnabled?: boolean;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
   }
 
+  const FAL_ENDPOINT = 'fal-ai/kling-video/v3/image-to-video';
+  const falHeaders = { 'Authorization': `Key ${apiKey}`, 'Content-Type': 'application/json' };
+
+  console.log(`[Kling/fal] endpoint=${FAL_ENDPOINT} duration=${duration} audio=${audioEnabled}`);
+  console.log(`[Kling/fal] key=${apiKey.slice(0, 8)}… (len=${apiKey.length})`);
+
   async function attemptKling(p: string): Promise<string> {
-    const jwt = generateKlingJWT(accessKey as string, secretKey as string);
-    const createRes = await fetch('https://api.klingai.com/v1/videos/image2video', {
+    const submitRes = await fetch(`https://queue.fal.run/${FAL_ENDPOINT}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+      headers: falHeaders,
       body: JSON.stringify({
-        model_name: 'kling-v1',
-        image: imageBase64,
+        image_url: imageBase64,
         prompt: p,
         duration: String(duration),
-        mode: 'std',
-        cfg_scale: 0.5,
+        aspect_ratio: '16:9',
+        motion_has_audio: audioEnabled,
       }),
     });
 
-    if (!createRes.ok) {
-      const err = await createRes.json().catch(() => ({})) as { message?: string };
-      throw new Error(err.message ?? `Kling error ${createRes.status}`);
+    const submitBody = await submitRes.text();
+    console.log(`[Kling/fal] submit status=${submitRes.status} body=${submitBody}`);
+
+    if (!submitRes.ok) {
+      let msg: string;
+      try { msg = (JSON.parse(submitBody) as { detail?: string; error?: string }).detail ?? (JSON.parse(submitBody) as { error?: string }).error ?? `Kling error ${submitRes.status}`; }
+      catch { msg = `Kling error ${submitRes.status}: ${submitBody}`; }
+      throw new Error(msg);
     }
 
-    const body = await createRes.json() as { code: number; message?: string; data?: { task_id: string } };
-    if (body.code !== 0 || !body.data?.task_id) {
-      throw new Error(body.message ?? 'Kling task creation failed');
-    }
+    const { request_id } = JSON.parse(submitBody) as { request_id: string };
+    if (!request_id) throw new Error('fal.ai did not return a request_id');
 
-    const taskId = body.data.task_id;
+    console.log(`[Kling/fal] request_id=${request_id}`);
+
     return pollUntilDone(async () => {
-      const freshJwt = generateKlingJWT(accessKey as string, secretKey as string);
-      const r = await fetch(`https://api.klingai.com/v1/videos/image2video/${taskId}`, {
-        headers: { Authorization: `Bearer ${freshJwt}` },
-      });
-      const t = await r.json() as {
-        data?: { task_status: string; task_result?: { videos?: { url: string }[] } };
-      };
-      const status = t.data?.task_status;
-      if (status === 'succeed') return { status: 'done', url: t.data?.task_result?.videos?.[0]?.url };
-      if (status === 'failed') return { status: 'failed', error: 'Kling task failed' };
+      const statusRes = await fetch(
+        `https://queue.fal.run/${FAL_ENDPOINT}/requests/${request_id}/status`,
+        { headers: falHeaders }
+      );
+      const s = await statusRes.json() as { status: string; error?: string };
+      console.log(`[Kling/fal] poll status=${s.status}`);
+
+      if (s.status === 'COMPLETED') {
+        const resultRes = await fetch(
+          `https://queue.fal.run/${FAL_ENDPOINT}/requests/${request_id}`,
+          { headers: falHeaders }
+        );
+        const data = await resultRes.json() as { video?: { url: string } };
+        return { status: 'done', url: data.video?.url };
+      }
+      if (s.status === 'FAILED' || s.status === 'ERROR') {
+        return { status: 'failed', error: s.error ?? 'Kling generation failed' };
+      }
       return { status: 'pending' };
-    });
+    }, 90, 5000);
   }
 
   try {
     let url: string;
     try {
-      url = await attemptKling(prompt);
+      url = await attemptKling(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
         try {
-          url = await attemptKling(sanitizePrompt(prompt));
+          url = await attemptKling(wrapPrompt(sanitizePrompt(prompt)));
         } catch {
           res.status(400).json({ error: safetyMessage('Kling') });
           return;
         }
-      } else {
-        throw firstErr;
-      }
+      } else { throw firstErr; }
     }
     res.json({ url });
   } catch (err) {
@@ -354,18 +367,16 @@ app.post('/api/vidu', async (req, res) => {
   try {
     let url: string;
     try {
-      url = await attemptVidu(prompt);
+      url = await attemptVidu(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
         try {
-          url = await attemptVidu(sanitizePrompt(prompt));
+          url = await attemptVidu(wrapPrompt(sanitizePrompt(prompt)));
         } catch {
           res.status(400).json({ error: safetyMessage('Vidu') });
           return;
         }
-      } else {
-        throw firstErr;
-      }
+      } else { throw firstErr; }
     }
     res.json({ url });
   } catch (err) {
@@ -430,18 +441,16 @@ app.post('/api/veo', async (req, res) => {
   try {
     let url: string;
     try {
-      url = await attemptVeo(prompt);
+      url = await attemptVeo(wrapPrompt(prompt));
     } catch (firstErr) {
       if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
         try {
-          url = await attemptVeo(sanitizePrompt(prompt));
+          url = await attemptVeo(wrapPrompt(sanitizePrompt(prompt)));
         } catch {
           res.status(400).json({ error: safetyMessage('Veo') });
           return;
         }
-      } else {
-        throw firstErr;
-      }
+      } else { throw firstErr; }
     }
     res.json({ url });
   } catch (err) {

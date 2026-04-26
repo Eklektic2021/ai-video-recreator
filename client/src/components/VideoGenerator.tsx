@@ -2,8 +2,7 @@ import { useState, useCallback } from 'react';
 import type { SceneAnalysis } from '../types';
 import {
   getStoredRunwayKey,
-  getStoredKlingAccess,
-  getStoredKlingSecret,
+  getStoredFalKey,
   getStoredViduKey,
   getStoredGeminiKey,
   generateWithRunway,
@@ -22,14 +21,14 @@ interface VideoState {
 
 const PROVIDERS: { id: Provider; label: string }[] = [
   { id: 'runway', label: 'Runway Gen-4' },
-  { id: 'kling',  label: 'Kling AI'    },
+  { id: 'kling',  label: 'Kling 3.0'   },
   { id: 'vidu',   label: 'Vidu 2.0'   },
   { id: 'veo',    label: 'Veo 2'      },
 ];
 
 const DURATION_OPTIONS: Record<Provider, number[]> = {
   runway: [5, 10],
-  kling:  [5, 10],
+  kling:  [5, 10, 15],
   vidu:   [4, 8],
   veo:    [8],
 };
@@ -59,7 +58,7 @@ async function downloadVideo(url: string, sceneNum: number) {
 
 function providerKeyName(p: Provider): string {
   if (p === 'runway') return 'Runway';
-  if (p === 'kling') return 'Kling';
+  if (p === 'kling') return 'fal.ai';
   if (p === 'vidu') return 'Vidu';
   return 'Gemini (Veo)';
 }
@@ -73,24 +72,25 @@ interface Props {
 export default function VideoGenerator({ scenes, generatedImages, onSwitchToImages }: Props) {
   const [provider, setProvider] = useState<Provider>('runway');
   const [duration, setDuration] = useState<number>(5);
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
 
-  const runwayKey    = getStoredRunwayKey();
-  const klingAccess  = getStoredKlingAccess();
-  const klingSecret  = getStoredKlingSecret();
-  const viduKey      = getStoredViduKey();
-  const geminiKey    = getStoredGeminiKey();
+  const runwayKey = getStoredRunwayKey();
+  const falKey    = getStoredFalKey();
+  const viduKey   = getStoredViduKey();
+  const geminiKey = getStoredGeminiKey();
 
   const hasKey =
     provider === 'runway' ? !!runwayKey :
-    provider === 'kling'  ? !!(klingAccess && klingSecret) :
-    provider === 'vidu'   ? !!viduKey :
+    provider === 'kling'  ? !!falKey    :
+    provider === 'vidu'   ? !!viduKey   :
     !!geminiKey;
 
   const handleProviderChange = (p: Provider) => {
     setProvider(p);
     setDuration(DURATION_OPTIONS[p][0]);
+    setAudioEnabled(false);
   };
 
   const setVideoState = useCallback((sceneNum: number, update: Partial<VideoState>) => {
@@ -111,7 +111,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       if (provider === 'runway') {
         url = await generateWithRunway(imageSource, prompt, runwayKey, duration);
       } else if (provider === 'kling') {
-        url = await generateWithKling(imageSource, prompt, klingAccess, klingSecret, duration);
+        url = await generateWithKling(imageSource, prompt, falKey, duration, audioEnabled);
       } else if (provider === 'vidu') {
         url = await generateWithVidu(imageSource, prompt, viduKey, duration);
       } else {
@@ -124,15 +124,13 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Video generation failed',
       });
     }
-  }, [provider, duration, runwayKey, klingAccess, klingSecret, viduKey, geminiKey, hasKey, generatedImages, setVideoState]);
+  }, [provider, duration, audioEnabled, runwayKey, falKey, viduKey, geminiKey, hasKey, generatedImages, setVideoState]);
 
   const generateAll = useCallback(async () => {
     if (!hasKey || generatingAll) return;
     setGeneratingAll(true);
     for (const scene of scenes) {
-      if (generatedImages[scene.scene]) {
-        await generateOne(scene);
-      }
+      if (generatedImages[scene.scene]) await generateOne(scene);
     }
     setGeneratingAll(false);
   }, [hasKey, generatingAll, scenes, generatedImages, generateOne]);
@@ -193,6 +191,27 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         )}
       </div>
 
+      {/* ── Kling audio toggle ── */}
+      {provider === 'kling' && (
+        <div className="vidgen-audio-row">
+          <label className="vidgen-toggle-wrap">
+            <input
+              type="checkbox"
+              className="vidgen-toggle-input"
+              checked={audioEnabled}
+              onChange={(e) => setAudioEnabled(e.target.checked)}
+            />
+            <span className="vidgen-toggle-track">
+              <span className="vidgen-toggle-thumb" />
+            </span>
+            <span className="vidgen-audio-text">Generate with Native Audio 🎙️</span>
+          </label>
+          <p className="vidgen-audio-note">
+            Audio generates dialogue and ambient sound in English, Spanish, Japanese, Korean, and Chinese
+          </p>
+        </div>
+      )}
+
       {/* ── No images notice ── */}
       {scenesWithoutImages.length > 0 && (
         <div className="vidgen-notice">
@@ -237,6 +256,9 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                   <span className="vidgen-scene-label">Scene {scene.scene}</span>
                   <span className="vidgen-scene-ts">{scene.timestamp}</span>
                   <span className="vidgen-scene-duration">{duration}s</span>
+                  {provider === 'kling' && audioEnabled && (
+                    <span className="vidgen-scene-audio-badge">🎙️ audio</span>
+                  )}
                 </div>
                 {hasKey && imageUrl && (
                   <button
@@ -259,7 +281,6 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
               </div>
 
               <div className="vidgen-body">
-                {/* Source image thumbnail */}
                 <div className="vidgen-source">
                   {imageUrl ? (
                     <img src={imageUrl} alt={`Scene ${scene.scene} reference`} className="vidgen-thumb" />
@@ -274,7 +295,6 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                   )}
                 </div>
 
-                {/* Video output */}
                 <div className="vidgen-output">
                   <p className="vidgen-prompt-preview">{buildPrompt(scene)}</p>
 
@@ -282,24 +302,16 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-loading-area">
                       <div className="spinner" />
                       <p className="vidgen-loading-text">
-                        Generating {duration}s clip… this can take 1–3 minutes
+                        Generating {duration}s clip{audioEnabled && provider === 'kling' ? ' with audio' : ''}… this can take 1–3 minutes
                       </p>
                     </div>
                   )}
 
                   {!isLoading && videoUrl && (
                     <div className="vidgen-result">
-                      <video
-                        src={videoUrl}
-                        controls
-                        className="vidgen-video"
-                        preload="metadata"
-                      />
+                      <video src={videoUrl} controls className="vidgen-video" preload="metadata" />
                       <div className="vidgen-video-actions">
-                        <button
-                          className="vidgen-download-btn"
-                          onClick={() => downloadVideo(videoUrl, scene.scene)}
-                        >
+                        <button className="vidgen-download-btn" onClick={() => downloadVideo(videoUrl, scene.scene)}>
                           ↓ Download
                         </button>
                         <button
@@ -352,7 +364,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
 
       {/* ── Veo audio banner ── */}
       <div className="vidgen-audio-banner">
-        🎙️ Want clips with dialogue and audio? Use <strong>Google Veo</strong> — the only provider that generates native audio. Add your <strong>Gemini API key</strong> in settings to unlock it.
+        🎙️ Want clips with dialogue and audio? Use <strong>Google Veo</strong> or <strong>Kling 3.0</strong> — both generate native audio. Add your API keys in settings to unlock them.
       </div>
     </div>
   );
