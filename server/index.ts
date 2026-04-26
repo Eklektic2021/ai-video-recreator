@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import RunwayML from '@runwayml/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -106,50 +107,36 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
-  const runwayHeaders = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-    'X-Runway-Version': '2024-11-06',
-  };
-  console.log('[Runway] POST https://api.runwayml.com/v1/image_to_video');
-  console.log('[Runway] Headers:', JSON.stringify({ ...runwayHeaders, Authorization: `Bearer ${apiKey.slice(0, 8)}…` }));
-
   try {
-    const createRes = await fetch('https://api.runwayml.com/v1/image_to_video', {
-      method: 'POST',
-      headers: runwayHeaders,
-      body: JSON.stringify({
-        model: 'gen4_turbo',
-        promptImage: imageBase64,
-        promptText: prompt,
-        duration: 5,
-        ratio: '1280:720',
-      }),
+    const client = new RunwayML({ apiKey });
+    const imageToVideo = await client.imageToVideo.create({
+      model: 'gen4_turbo',
+      promptImage: imageBase64,
+      promptText: prompt,
+      duration: 5,
+      ratio: '1280:720',
     });
 
-    if (!createRes.ok) {
-      const err = await createRes.json().catch(() => ({})) as { message?: string };
-      res.status(createRes.status).json({ error: err.message ?? `Runway error ${createRes.status}` });
+    let task = await client.tasks.retrieve(imageToVideo.id);
+    let attempts = 0;
+    while (task.status !== 'SUCCEEDED' && task.status !== 'FAILED') {
+      if (++attempts > 90) throw new Error('Request timed out after 450 seconds');
+      await new Promise((r) => setTimeout(r, 5000));
+      task = await client.tasks.retrieve(imageToVideo.id);
+    }
+
+    if (task.status === 'FAILED') {
+      res.status(500).json({ error: task.failure ?? 'Runway generation failed' });
       return;
     }
 
-    const task = await createRes.json() as { id: string };
-    const taskId = task.id;
-
-    try {
-      const url = await pollUntilDone(async () => {
-        const r = await fetch(`https://api.runwayml.com/v1/tasks/${taskId}`, {
-          headers: { Authorization: `Bearer ${apiKey}`, 'X-Runway-Version': '2024-11-06' },
-        });
-        const t = await r.json() as { status: string; output?: string[]; failure?: string };
-        if (t.status === 'SUCCEEDED') return { status: 'done', url: t.output?.[0] };
-        if (t.status === 'FAILED') return { status: 'failed', error: t.failure };
-        return { status: 'pending' };
-      });
-      res.json({ url });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
+    const url = task.output?.[0] ?? null;
+    if (!url) {
+      res.status(500).json({ error: 'No output URL returned' });
+      return;
     }
+
+    res.json({ url });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
   }
