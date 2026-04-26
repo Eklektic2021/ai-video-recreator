@@ -7,6 +7,7 @@ const VIDEO_PLATFORMS = [
   'Pika Labs',
   'Sora',
   'Luma Dream Machine',
+  'Google Flow',
   'Vidu',
 ];
 
