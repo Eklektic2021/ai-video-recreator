@@ -52,13 +52,14 @@ async function throwOnError(res: Response, label: string): Promise<void> {
 export async function generateWithRunway(
   imageSource: string,
   prompt: string,
-  apiKey: string
+  apiKey: string,
+  duration = 5
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/runway', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-runway-key': apiKey },
-    body: JSON.stringify({ prompt, imageBase64: base64 }),
+    body: JSON.stringify({ prompt, imageBase64: base64, duration }),
   });
   await throwOnError(res, 'Runway');
   const data = await res.json() as { url: string };
@@ -69,7 +70,8 @@ export async function generateWithKling(
   imageSource: string,
   prompt: string,
   accessKey: string,
-  secretKey: string
+  secretKey: string,
+  duration = 5
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/kling', {
@@ -79,7 +81,7 @@ export async function generateWithKling(
       'x-kling-access': accessKey,
       'x-kling-secret': secretKey,
     },
-    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64) }),
+    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64), duration }),
   });
   await throwOnError(res, 'Kling');
   const data = await res.json() as { url: string };
@@ -89,14 +91,14 @@ export async function generateWithKling(
 export async function generateWithVidu(
   imageSource: string,
   prompt: string,
-  apiKey: string
+  apiKey: string,
+  duration = 4
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/vidu', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-vidu-key': apiKey },
-    // Send full data URI — new Vidu endpoint uses it in the image prompt data field
-    body: JSON.stringify({ prompt, imageBase64: base64 }),
+    body: JSON.stringify({ prompt, imageBase64: base64, duration }),
   });
   await throwOnError(res, 'Vidu');
   const data = await res.json() as { url: string };
@@ -106,14 +108,14 @@ export async function generateWithVidu(
 export async function generateWithVeo(
   imageSource: string,
   prompt: string,
-  apiKey: string
+  apiKey: string,
+  duration = 8
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/veo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-gemini-key': apiKey },
-    // Gemini wants raw base64 bytes, not a data URI
-    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64) }),
+    body: JSON.stringify({ prompt, imageBase64: stripPrefix(base64), duration }),
   });
   await throwOnError(res, 'Veo');
   const data = await res.json() as { url: string };

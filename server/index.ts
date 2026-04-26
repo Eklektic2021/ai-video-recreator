@@ -101,7 +101,7 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  const { prompt, imageBase64, duration = 5 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
@@ -113,7 +113,7 @@ app.post('/api/runway', async (req, res) => {
       model: 'gen4_turbo',
       promptImage: imageBase64,
       promptText: prompt,
-      duration: 5,
+      duration: duration as 5 | 10,
       ratio: '1280:720',
     });
 
@@ -160,7 +160,7 @@ app.post('/api/kling', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  const { prompt, imageBase64, duration = 5 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
@@ -176,7 +176,7 @@ app.post('/api/kling', async (req, res) => {
         model_name: 'kling-v1',
         image: imageBase64,
         prompt,
-        duration: '5',
+        duration: String(duration),
         mode: 'std',
         cfg_scale: 0.5,
       }),
@@ -227,7 +227,7 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  const { prompt, imageBase64, duration = 4 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
@@ -252,7 +252,7 @@ app.post('/api/vidu', async (req, res) => {
             { type: 'text', data: prompt },
           ],
         },
-        output_params: { sample_count: 1, duration: 4 },
+        output_params: { sample_count: 1, duration },
       }),
     });
 
@@ -296,7 +296,7 @@ app.post('/api/veo', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  const { prompt, imageBase64, duration = 8 } = req.body as { prompt?: string; imageBase64?: string; duration?: number };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
     return;
@@ -310,7 +310,7 @@ app.post('/api/veo', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instances: [{ prompt, image: { bytesBase64Encoded: imageBase64 } }],
-          parameters: { aspectRatio: '16:9', durationSeconds: 8 },
+          parameters: { aspectRatio: '16:9', durationSeconds: duration },
         }),
       }
     );

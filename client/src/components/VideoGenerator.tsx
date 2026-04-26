@@ -20,12 +20,19 @@ interface VideoState {
   error: string | null;
 }
 
-const PROVIDERS: { id: Provider; label: string; duration: string }[] = [
-  { id: 'runway', label: 'Runway Gen-4', duration: '5s' },
-  { id: 'kling',  label: 'Kling AI',     duration: '5s' },
-  { id: 'vidu',   label: 'Vidu 2.0',     duration: '4s' },
-  { id: 'veo',    label: 'Veo 2',        duration: '8s' },
+const PROVIDERS: { id: Provider; label: string }[] = [
+  { id: 'runway', label: 'Runway Gen-4' },
+  { id: 'kling',  label: 'Kling AI'    },
+  { id: 'vidu',   label: 'Vidu 2.0'   },
+  { id: 'veo',    label: 'Veo 2'      },
 ];
+
+const DURATION_OPTIONS: Record<Provider, number[]> = {
+  runway: [5, 10],
+  kling:  [5, 10],
+  vidu:   [4, 8],
+  veo:    [8],
+};
 
 function buildPrompt(scene: SceneAnalysis): string {
   return [
@@ -65,6 +72,7 @@ interface Props {
 
 export default function VideoGenerator({ scenes, generatedImages, onSwitchToImages }: Props) {
   const [provider, setProvider] = useState<Provider>('runway');
+  const [duration, setDuration] = useState<number>(5);
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
 
@@ -80,7 +88,10 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     provider === 'vidu'   ? !!viduKey :
     !!geminiKey;
 
-  const selectedDuration = PROVIDERS.find((p) => p.id === provider)?.duration ?? '5s';
+  const handleProviderChange = (p: Provider) => {
+    setProvider(p);
+    setDuration(DURATION_OPTIONS[p][0]);
+  };
 
   const setVideoState = useCallback((sceneNum: number, update: Partial<VideoState>) => {
     setVideos((prev) => {
@@ -98,13 +109,13 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       const prompt = buildPrompt(scene);
       let url: string;
       if (provider === 'runway') {
-        url = await generateWithRunway(imageSource, prompt, runwayKey);
+        url = await generateWithRunway(imageSource, prompt, runwayKey, duration);
       } else if (provider === 'kling') {
-        url = await generateWithKling(imageSource, prompt, klingAccess, klingSecret);
+        url = await generateWithKling(imageSource, prompt, klingAccess, klingSecret, duration);
       } else if (provider === 'vidu') {
-        url = await generateWithVidu(imageSource, prompt, viduKey);
+        url = await generateWithVidu(imageSource, prompt, viduKey, duration);
       } else {
-        url = await generateWithVeo(imageSource, prompt, geminiKey);
+        url = await generateWithVeo(imageSource, prompt, geminiKey, duration);
       }
       setVideoState(scene.scene, { url, loading: false });
     } catch (err) {
@@ -113,7 +124,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Video generation failed',
       });
     }
-  }, [provider, runwayKey, klingAccess, klingSecret, viduKey, geminiKey, hasKey, generatedImages, setVideoState]);
+  }, [provider, duration, runwayKey, klingAccess, klingSecret, viduKey, geminiKey, hasKey, generatedImages, setVideoState]);
 
   const generateAll = useCallback(async () => {
     if (!hasKey || generatingAll) return;
@@ -141,7 +152,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
               <button
                 key={id}
                 className={`vidgen-provider-btn${provider === id ? ' vidgen-provider-btn--active' : ''}`}
-                onClick={() => setProvider(id)}
+                onClick={() => handleProviderChange(id)}
               >
                 {label}
               </button>
@@ -160,6 +171,26 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Duration selector ── */}
+      <div className="vidgen-duration-row">
+        <span className="vidgen-duration-label">Clip Duration</span>
+        {provider === 'veo' ? (
+          <span className="vidgen-duration-badge">8s</span>
+        ) : (
+          <div className="vidgen-duration-pills">
+            {DURATION_OPTIONS[provider].map((d) => (
+              <button
+                key={d}
+                className={`vidgen-duration-btn${duration === d ? ' vidgen-duration-btn--active' : ''}`}
+                onClick={() => setDuration(d)}
+              >
+                {d}s
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── No images notice ── */}
@@ -205,7 +236,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                 <div className="vidgen-scene-info">
                   <span className="vidgen-scene-label">Scene {scene.scene}</span>
                   <span className="vidgen-scene-ts">{scene.timestamp}</span>
-                  <span className="vidgen-scene-duration">{selectedDuration}</span>
+                  <span className="vidgen-scene-duration">{duration}s</span>
                 </div>
                 {hasKey && imageUrl && (
                   <button
@@ -251,7 +282,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-loading-area">
                       <div className="spinner" />
                       <p className="vidgen-loading-text">
-                        Generating {selectedDuration} clip… this can take 1–3 minutes
+                        Generating {duration}s clip… this can take 1–3 minutes
                       </p>
                     </div>
                   )}
@@ -299,7 +330,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-empty-state">
                       <span className="vidgen-empty-icon">▶</span>
                       <p className="vidgen-empty-text">
-                        Click Generate Clip to create a {selectedDuration} video
+                        Click Generate Clip to create a {duration}s video
                       </p>
                     </div>
                   )}
@@ -317,6 +348,11 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
             </div>
           );
         })}
+      </div>
+
+      {/* ── Veo audio banner ── */}
+      <div className="vidgen-audio-banner">
+        🎙️ Want clips with dialogue and audio? Use <strong>Google Veo</strong> — the only provider that generates native audio. Add your <strong>Gemini API key</strong> in settings to unlock it.
       </div>
     </div>
   );

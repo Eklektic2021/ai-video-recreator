@@ -2296,3 +2296,59 @@ body.light-mode {
 .light-mode .vidgen-regen-btn { color: #555; border-color: rgba(0,0,0,0.15); }
 .light-mode .vidgen-regen-btn:hover { background: #f0f0f0; color: #222; }
 
+/* ── Duration selector ── */
+.vidgen-duration-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.1rem 0;
+}
+.vidgen-duration-label { font-size: 0.8rem; color: var(--text-3); font-weight: 500; white-space: nowrap; }
+.vidgen-duration-pills { display: flex; gap: 0.3rem; }
+.vidgen-duration-btn {
+  padding: 0.18rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.vidgen-duration-btn:hover { background: var(--bg-hover); color: var(--text-1); }
+.vidgen-duration-btn--active {
+  background: rgba(0,217,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.vidgen-duration-badge {
+  font-size: 0.75rem;
+  color: var(--cyan);
+  background: rgba(0,217,255,0.1);
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid rgba(0,217,255,0.2);
+  font-weight: 500;
+}
+.light-mode .vidgen-duration-btn { border-color: rgba(0,0,0,0.15); color: #555; }
+.light-mode .vidgen-duration-btn:hover { background: #f0f0f0; color: #222; }
+.light-mode .vidgen-duration-btn--active { background: rgba(0,100,220,0.08); border-color: #0064dc; color: #0064dc; }
+.light-mode .vidgen-duration-badge { background: rgba(0,100,220,0.08); border-color: rgba(0,100,220,0.25); color: #0064dc; }
+
+/* ── Veo audio banner ── */
+.vidgen-audio-banner {
+  border: 1px solid rgba(212,175,55,0.38);
+  background: rgba(212,175,55,0.05);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.light-mode .vidgen-audio-banner {
+  background: rgba(180,140,0,0.05);
+  border-color: rgba(180,140,0,0.32);
+  color: #555;
+}
+
