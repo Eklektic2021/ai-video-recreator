@@ -233,12 +233,16 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
-  const viduHeaders = { 'Content-Type': 'application/json', Authorization: `Token ${apiKey}` };
-  console.log('[Vidu] POST https://api.vidu.studio/vidu/v1/tasks');
-  console.log('[Vidu] Headers:', JSON.stringify({ ...viduHeaders, Authorization: `Token ${apiKey.slice(0, 8)}…` }));
+  const CREATE_URL = 'https://api.vidu.studio/vidu/v1/tasks';
+  const authHeader = `Token ${apiKey}`;
+  const viduHeaders = { 'Content-Type': 'application/json', Authorization: authHeader };
+
+  console.log(`[Vidu] POST ${CREATE_URL}`);
+  console.log(`[Vidu] Authorization: Token ${apiKey.slice(0, 8)}… (len=${apiKey.length})`);
+  console.log(`[Vidu] duration=${duration} imageBase64 prefix="${imageBase64.slice(0, 30)}…"`);
 
   try {
-    const createRes = await fetch('https://api.vidu.studio/vidu/v1/tasks', {
+    const createRes = await fetch(CREATE_URL, {
       method: 'POST',
       headers: viduHeaders,
       body: JSON.stringify({
@@ -256,29 +260,36 @@ app.post('/api/vidu', async (req, res) => {
       }),
     });
 
+    const createBody = await createRes.text();
+    console.log(`[Vidu] create status=${createRes.status} body=${createBody}`);
+
     if (!createRes.ok) {
-      const err = await createRes.json().catch(() => ({})) as { message?: string };
-      res.status(createRes.status).json({ error: err.message ?? `Vidu error ${createRes.status}` });
+      const parsed = JSON.parse(createBody).catch?.(() => ({})) ?? (() => { try { return JSON.parse(createBody); } catch { return {}; } })();
+      res.status(createRes.status).json({ error: (parsed as { message?: string }).message ?? `Vidu error ${createRes.status}: ${createBody}` });
       return;
     }
 
-    const task = await createRes.json() as { id?: string; task_id?: string };
+    const task = JSON.parse(createBody) as { id?: string; task_id?: string };
     const taskId = task.id ?? task.task_id;
     if (!taskId) {
-      res.status(500).json({ error: 'Vidu did not return a task ID' });
+      res.status(500).json({ error: `Vidu did not return a task ID. Response: ${createBody}` });
       return;
     }
 
+    console.log(`[Vidu] task created id=${taskId}`);
+
     try {
+      const POLL_URL = `https://api.vidu.studio/vidu/v1/tasks/${taskId}`;
       const url = await pollUntilDone(async () => {
-        const r = await fetch(`https://api.vidu.studio/vidu/v1/tasks/${taskId}`, {
-          headers: { Authorization: `Token ${apiKey}` },
+        const r = await fetch(POLL_URL, {
+          headers: { Authorization: authHeader },
         });
         const t = await r.json() as { state?: string; creations?: { url: string }[] };
+        console.log(`[Vidu] poll ${POLL_URL} → state=${t.state}`);
         if (t.state === 'success') return { status: 'done', url: t.creations?.[0]?.url };
         if (t.state === 'failed') return { status: 'failed', error: 'Vidu task failed' };
         return { status: 'pending' };
-      });
+      }, 90, 5000);
       res.json({ url });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
