@@ -2414,3 +2414,44 @@ body.light-mode {
 .light-mode .vidgen-audio-note { color: #888; }
 .light-mode .vidgen-scene-audio-badge { background: rgba(0,100,220,0.08); border-color: rgba(0,100,220,0.25); color: #0064dc; }
 
+/* ── Dialogue notice ── */
+.vidgen-dialogue-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(0,217,255,0.06);
+  border-left: 3px solid var(--cyan);
+  color: var(--cyan);
+  border-radius: 0 4px 4px 0;
+  margin: 0 0 8px 0;
+}
+.light-mode .vidgen-dialogue-notice {
+  background: rgba(0,100,220,0.05);
+  border-left-color: #0064dc;
+  color: #0064dc;
+}
+
+/* ── Force Audio checkbox ── */
+.vidgen-force-audio-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  cursor: pointer;
+  margin-left: 6px;
+  user-select: none;
+}
+.vidgen-force-audio-wrap input[type="checkbox"] {
+  width: 11px;
+  height: 11px;
+  cursor: pointer;
+  accent-color: var(--cyan);
+}
+.vidgen-force-audio-wrap:has(input:checked) { color: var(--cyan); }
+.light-mode .vidgen-force-audio-wrap { color: #888; }
+.light-mode .vidgen-force-audio-wrap input[type="checkbox"] { accent-color: #0064dc; }
+.light-mode .vidgen-force-audio-wrap:has(input:checked) { color: #0064dc; }

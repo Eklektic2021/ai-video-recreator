@@ -39,6 +39,12 @@ function buildPrompt(scene: SceneAnalysis): string {
   ].join('. ');
 }
 
+function hasDialogue(text: string): boolean {
+  if (/\b(says?|said|speaks?|spoke|tells?|told|whispers?|shouts?|shout|cries?|calls?|replies?|asks?|asked|answers?|answered|mutters?|exclaims?|announces?|declares?)\b/i.test(text)) return true;
+  if (/"[^"]{10,}"/.test(text) || /“[^”]{10,}”/.test(text)) return true;
+  return false;
+}
+
 async function downloadVideo(url: string, sceneNum: number) {
   try {
     const res = await fetch(url);
@@ -65,6 +71,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [forceAudio, setForceAudio] = useState<Record<number, boolean>>({});
 
   const kieKey = getStoredKieKey();
   const hasKey = !!kieKey;
@@ -86,11 +93,15 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     const imageSource = generatedImages[scene.scene];
     if (!imageSource || !hasKey) return;
 
+    const prompt = buildPrompt(scene);
+    const useVeoAudio = hasDialogue(prompt) || (forceAudio[scene.scene] ?? false);
+
     setVideoState(scene.scene, { loading: true, error: null, url: null });
     try {
-      const prompt = buildPrompt(scene);
       let url: string;
-      if (provider === 'runway') {
+      if (useVeoAudio) {
+        url = await generateWithVeo(imageSource, prompt, kieKey, 8, true);
+      } else if (provider === 'runway') {
         url = await generateWithRunway(imageSource, prompt, kieKey, duration);
       } else if (provider === 'kling') {
         url = await generateWithKling(imageSource, prompt, kieKey, duration, audioEnabled);
@@ -106,7 +117,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Video generation failed',
       });
     }
-  }, [provider, duration, audioEnabled, kieKey, hasKey, generatedImages, setVideoState]);
+  }, [provider, duration, audioEnabled, kieKey, hasKey, generatedImages, setVideoState, forceAudio]);
 
   const generateAll = useCallback(async () => {
     if (!hasKey || generatingAll) return;
@@ -231,12 +242,15 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       {/* ── Per-scene cards ── */}
       <div className="vidgen-scenes">
         {scenes.map((scene) => {
-          const imageUrl  = generatedImages[scene.scene] ?? null;
-          const vid       = videos[scene.scene];
-          const isLoading = vid?.loading ?? false;
-          const videoUrl  = vid?.url ?? null;
-          const error     = vid?.error ?? null;
-          const hasResult = videoUrl !== null || error !== null;
+          const imageUrl    = generatedImages[scene.scene] ?? null;
+          const vid         = videos[scene.scene];
+          const isLoading   = vid?.loading ?? false;
+          const videoUrl    = vid?.url ?? null;
+          const error       = vid?.error ?? null;
+          const hasResult   = videoUrl !== null || error !== null;
+          const scenePrompt = buildPrompt(scene);
+          const autoDialogue = hasDialogue(scenePrompt);
+          const useVeoAudio  = autoDialogue || (forceAudio[scene.scene] ?? false);
 
           return (
             <div key={scene.scene} className="vidgen-scene-card">
@@ -244,10 +258,18 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                 <div className="vidgen-scene-info">
                   <span className="vidgen-scene-label">Scene {scene.scene}</span>
                   <span className="vidgen-scene-ts">{scene.timestamp}</span>
-                  <span className="vidgen-scene-duration">{duration}s</span>
-                  {provider === 'kling' && audioEnabled && (
+                  <span className="vidgen-scene-duration">{useVeoAudio ? 8 : duration}s</span>
+                  {provider === 'kling' && audioEnabled && !useVeoAudio && (
                     <span className="vidgen-scene-audio-badge">🎙️ audio</span>
                   )}
+                  <label className="vidgen-force-audio-wrap">
+                    <input
+                      type="checkbox"
+                      checked={forceAudio[scene.scene] ?? false}
+                      onChange={(e) => setForceAudio((prev) => ({ ...prev, [scene.scene]: e.target.checked }))}
+                    />
+                    <span>Force Audio</span>
+                  </label>
                 </div>
                 {hasKey && imageUrl && (
                   <button
@@ -268,6 +290,12 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                   </button>
                 )}
               </div>
+
+              {useVeoAudio && (
+                <div className="vidgen-dialogue-notice">
+                  🎙️ {autoDialogue ? 'Dialogue detected' : 'Audio forced'} — using Veo 3.1 for native audio
+                </div>
+              )}
 
               <div className="vidgen-body">
                 <div className="vidgen-source">
@@ -291,7 +319,9 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-loading-area">
                       <div className="spinner" />
                       <p className="vidgen-loading-text">
-                        Generating {duration}s clip{audioEnabled && provider === 'kling' ? ' with audio' : ''}… this can take 1–3 minutes
+                        {useVeoAudio
+                          ? 'Generating Veo 3.1 audio clip… this can take 2–4 minutes'
+                          : `Generating ${duration}s clip${audioEnabled && provider === 'kling' ? ' with audio' : ''}… this can take 1–3 minutes`}
                       </p>
                     </div>
                   )}

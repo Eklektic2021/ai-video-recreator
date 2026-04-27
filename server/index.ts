@@ -373,8 +373,8 @@ app.post('/api/veo', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64 } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number;
+  const { prompt, imageBase64, enableAudio = false } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; enableAudio?: boolean;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
@@ -382,18 +382,21 @@ app.post('/api/veo', async (req, res) => {
   }
 
   const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+  const veoModel = enableAudio ? 'veo3' : 'veo3_fast';
 
   async function attemptVeo(p: string): Promise<string> {
+    const body: KieCreateBody = {
+      prompt: p,
+      imageUrls: [imageBase64],
+      model: veoModel,
+      aspect_ratio: '16:9',
+      generationType: 'REFERENCE_2_VIDEO',
+    };
+    if (enableAudio) body.enableAudio = true;
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/veo/generate',
       kieHeaders,
-      {
-        prompt: p,
-        imageUrls: [imageBase64],
-        model: 'veo3_fast',
-        aspect_ratio: '16:9',
-        generationType: 'REFERENCE_2_VIDEO',
-      },
+      body,
       'Veo'
     );
     return pollUntilDone(

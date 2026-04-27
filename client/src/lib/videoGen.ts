@@ -77,13 +77,14 @@ export async function generateWithVeo(
   imageSource: string,
   prompt: string,
   kieKey: string,
-  duration = 8
+  duration = 8,
+  enableAudio = false
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/veo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-kie-key': kieKey },
-    body: JSON.stringify({ prompt, imageBase64: base64, duration }),
+    body: JSON.stringify({ prompt, imageBase64: base64, duration, enableAudio }),
   });
   await throwOnError(res, 'Veo');
   return (await res.json() as { url: string }).url;
