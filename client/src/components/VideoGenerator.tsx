@@ -30,6 +30,24 @@ const DURATION_OPTIONS: Record<Provider, number[]> = {
   veo:    [8],
 };
 
+type AspectRatio = '16:9' | '9:16' | '1:1';
+type Platform    = 'tiktok' | 'instagram' | 'youtube-shorts' | 'youtube' | 'facebook' | 'linkedin';
+
+const ASPECT_RATIOS: { id: AspectRatio; label: string }[] = [
+  { id: '16:9', label: '16:9  Landscape' },
+  { id: '9:16', label: '9:16  Vertical'  },
+  { id: '1:1',  label: '1:1  Square'    },
+];
+
+const PLATFORMS: { id: Platform; label: string; ratio: AspectRatio; directive: string }[] = [
+  { id: 'tiktok',         label: 'TikTok',          ratio: '9:16', directive: 'Vertical format, fast-paced, engaging first 3 seconds, optimized for mobile viewing.' },
+  { id: 'instagram',      label: 'Instagram Reels', ratio: '9:16', directive: 'Vertical format, visually striking, cinematic quality, mobile-first.' },
+  { id: 'youtube-shorts', label: 'YouTube Shorts',  ratio: '9:16', directive: 'Vertical format, quick hook in first 2 seconds, energetic pacing.' },
+  { id: 'youtube',        label: 'YouTube',         ratio: '16:9', directive: 'Landscape format, cinematic quality, high production value.' },
+  { id: 'facebook',       label: 'Facebook',        ratio: '16:9', directive: 'Landscape format, clear visuals, broad audience appeal.' },
+  { id: 'linkedin',       label: 'LinkedIn',        ratio: '1:1',  directive: 'Square format, professional tone, clean visuals.' },
+];
+
 function buildPrompt(scene: SceneAnalysis): string {
   return [
     scene.description,
@@ -72,6 +90,8 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
   const [forceAudio, setForceAudio] = useState<Record<number, boolean>>({});
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
+  const [platform, setPlatform] = useState<Platform | null>(null);
 
   const kieKey = getStoredKieKey();
   const hasKey = !!kieKey;
@@ -80,6 +100,11 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     setProvider(p);
     setDuration(DURATION_OPTIONS[p][0]);
     setAudioEnabled(false);
+  };
+
+  const handlePlatformSelect = (p: Platform) => {
+    const found = PLATFORMS.find((pl) => pl.id === p);
+    if (found) { setPlatform(p); setAspectRatio(found.ratio); }
   };
 
   const setVideoState = useCallback((sceneNum: number, update: Partial<VideoState>) => {
@@ -93,22 +118,24 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     const imageSource = generatedImages[scene.scene];
     if (!imageSource || !hasKey) return;
 
-    const prompt = buildPrompt(scene);
-    const useVeoAudio = hasDialogue(prompt) || (forceAudio[scene.scene] ?? false);
+    const rawPrompt    = buildPrompt(scene);
+    const platformEntry = platform ? PLATFORMS.find((p) => p.id === platform) : null;
+    const prompt       = platformEntry ? `${rawPrompt}. ${platformEntry.directive}` : rawPrompt;
+    const useVeoAudio  = hasDialogue(rawPrompt) || (forceAudio[scene.scene] ?? false);
 
     setVideoState(scene.scene, { loading: true, error: null, url: null });
     try {
       let url: string;
       if (useVeoAudio) {
-        url = await generateWithVeo(imageSource, prompt, kieKey, 8, true);
+        url = await generateWithVeo(imageSource, prompt, kieKey, 8, true, aspectRatio);
       } else if (provider === 'runway') {
-        url = await generateWithRunway(imageSource, prompt, kieKey, duration);
+        url = await generateWithRunway(imageSource, prompt, kieKey, duration, aspectRatio);
       } else if (provider === 'kling') {
-        url = await generateWithKling(imageSource, prompt, kieKey, duration, audioEnabled);
+        url = await generateWithKling(imageSource, prompt, kieKey, duration, audioEnabled, aspectRatio);
       } else if (provider === 'vidu') {
-        url = await generateWithVidu(imageSource, prompt, kieKey, duration);
+        url = await generateWithVidu(imageSource, prompt, kieKey, duration, aspectRatio);
       } else {
-        url = await generateWithVeo(imageSource, prompt, kieKey, duration);
+        url = await generateWithVeo(imageSource, prompt, kieKey, duration, false, aspectRatio);
       }
       setVideoState(scene.scene, { url, loading: false });
     } catch (err) {
@@ -117,7 +144,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Video generation failed',
       });
     }
-  }, [provider, duration, audioEnabled, kieKey, hasKey, generatedImages, setVideoState, forceAudio]);
+  }, [provider, duration, audioEnabled, kieKey, hasKey, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
 
   const generateAll = useCallback(async () => {
     if (!hasKey || generatingAll) return;
@@ -131,6 +158,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const scenesWithImages    = scenes.filter((s) => generatedImages[s.scene]);
   const scenesWithoutImages = scenes.filter((s) => !generatedImages[s.scene]);
   const doneCount           = Object.values(videos).filter((v) => v.url).length;
+  const platformLabel       = platform ? (PLATFORMS.find((p) => p.id === platform)?.label ?? null) : null;
 
   return (
     <div className="vidgen-section">
@@ -184,6 +212,38 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         )}
       </div>
 
+      {/* ── Aspect ratio selector ── */}
+      <div className="vidgen-aspect-row">
+        <span className="vidgen-aspect-label">Aspect Ratio</span>
+        <div className="vidgen-aspect-pills">
+          {ASPECT_RATIOS.map(({ id, label }) => (
+            <button
+              key={id}
+              className={`vidgen-aspect-btn${aspectRatio === id ? ' vidgen-aspect-btn--active' : ''}`}
+              onClick={() => setAspectRatio(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Platform selector ── */}
+      <div className="vidgen-platform-row">
+        <span className="vidgen-platform-label">Publishing To</span>
+        <div className="vidgen-platform-pills">
+          {PLATFORMS.map(({ id, label }) => (
+            <button
+              key={id}
+              className={`vidgen-platform-btn${platform === id ? ' vidgen-platform-btn--active' : ''}`}
+              onClick={() => handlePlatformSelect(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── Kling audio toggle ── */}
       {provider === 'kling' && (
         <div className="vidgen-audio-row">
@@ -226,7 +286,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         <div className="vidgen-missing-key">
           <span className="vidgen-missing-icon">⚠</span>
           <span>
-            Add your <strong>KIE AI API key</strong> in settings to generate videos.{' '}
+            Add your <strong>KIE AI API key</strong> in settings to generate{platformLabel ? ` ${platformLabel}` : ''} videos.{' '}
             <a
               href="https://kie.ai/dashboard/keys"
               target="_blank"
@@ -320,8 +380,8 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                       <div className="spinner" />
                       <p className="vidgen-loading-text">
                         {useVeoAudio
-                          ? 'Generating Veo 3.1 audio clip… this can take 2–4 minutes'
-                          : `Generating ${duration}s clip${audioEnabled && provider === 'kling' ? ' with audio' : ''}… this can take 1–3 minutes`}
+                          ? `Generating Veo 3.1 audio clip${platformLabel ? ` for ${platformLabel}` : ''}… this can take 2–4 minutes`
+                          : `Generating ${duration}s clip${audioEnabled && provider === 'kling' ? ' with audio' : ''}${platformLabel ? ` for ${platformLabel}` : ''}… this can take 1–3 minutes`}
                       </p>
                     </div>
                   )}
@@ -361,7 +421,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                     <div className="vidgen-empty-state">
                       <span className="vidgen-empty-icon">▶</span>
                       <p className="vidgen-empty-text">
-                        Click Generate Clip to create a {duration}s video
+                        Click Generate Clip to create a {useVeoAudio ? 8 : duration}s{platformLabel ? ` ${platformLabel}` : ''} video
                       </p>
                     </div>
                   )}

@@ -2455,3 +2455,84 @@ body.light-mode {
 .light-mode .vidgen-force-audio-wrap { color: #888; }
 .light-mode .vidgen-force-audio-wrap input[type="checkbox"] { accent-color: #0064dc; }
 .light-mode .vidgen-force-audio-wrap:has(input:checked) { color: #0064dc; }
+
+/* ── Aspect ratio selector ── */
+.vidgen-aspect-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.1rem 0;
+}
+.vidgen-aspect-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 90px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.vidgen-aspect-pills { display: flex; gap: 0.4rem; }
+.vidgen-aspect-btn {
+  padding: 0.22rem 0.72rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.vidgen-aspect-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.vidgen-aspect-btn--active {
+  background: rgba(0,217,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.light-mode .vidgen-aspect-label { color: #555; }
+.light-mode .vidgen-aspect-btn { border-color: rgba(0,0,0,0.15); color: #555; }
+.light-mode .vidgen-aspect-btn:hover { border-color: #0064dc; color: #0064dc; }
+.light-mode .vidgen-aspect-btn--active { background: rgba(0,100,220,0.08); border-color: #0064dc; color: #0064dc; }
+
+/* ── Platform selector ── */
+.vidgen-platform-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.1rem 0;
+}
+.vidgen-platform-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 90px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  padding-top: 0.28rem;
+}
+.vidgen-platform-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.vidgen-platform-btn {
+  padding: 0.22rem 0.72rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.vidgen-platform-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.vidgen-platform-btn--active {
+  background: rgba(0,217,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.light-mode .vidgen-platform-label { color: #555; }
+.light-mode .vidgen-platform-btn { border-color: rgba(0,0,0,0.15); color: #555; }
+.light-mode .vidgen-platform-btn:hover { border-color: #0064dc; color: #0064dc; }
+.light-mode .vidgen-platform-btn--active { background: rgba(0,100,220,0.08); border-color: #0064dc; color: #0064dc; }

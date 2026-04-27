@@ -227,8 +227,8 @@ app.post('/api/runway', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 5 } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number;
+  const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
@@ -242,7 +242,7 @@ app.post('/api/runway', async (req, res) => {
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/runway/generate',
       kieHeaders,
-      { prompt: p, imageUrl: imageBase64, model, waterMark: 'MAISuite Flow' },
+      { prompt: p, imageUrl: imageBase64, model, aspectRatio, waterMark: 'MAISuite Flow' },
       'Runway'
     );
     return pollUntilDone(
@@ -274,8 +274,8 @@ app.post('/api/kling', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 5, audioEnabled = false } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number; audioEnabled?: boolean;
+  const { prompt, imageBase64, duration = 5, audioEnabled = false, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; audioEnabled?: boolean; aspectRatio?: string;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
@@ -283,7 +283,7 @@ app.post('/api/kling', async (req, res) => {
   }
 
   const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
-  console.log(`[Kling/KIE] duration=${duration} audio=${audioEnabled}`);
+  console.log(`[Kling/KIE] duration=${duration} audio=${audioEnabled} ratio=${aspectRatio}`);
 
   async function attemptKling(p: string): Promise<string> {
     const taskId = await kieCreate(
@@ -293,7 +293,7 @@ app.post('/api/kling', async (req, res) => {
         prompt: p,
         imageUrl: imageBase64,
         duration: String(duration),
-        aspectRatio: '16:9',
+        aspectRatio,
         modelName: 'kling-v2.1',
       },
       'Kling'
@@ -327,8 +327,8 @@ app.post('/api/vidu', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, duration = 4 } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number;
+  const { prompt, imageBase64, duration = 4, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
@@ -341,7 +341,7 @@ app.post('/api/vidu', async (req, res) => {
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/vidu/generate',
       kieHeaders,
-      { prompt: p, imageUrl: imageBase64, duration, aspectRatio: '16:9' },
+      { prompt: p, imageUrl: imageBase64, duration, aspectRatio },
       'Vidu'
     );
     return pollUntilDone(
@@ -373,8 +373,8 @@ app.post('/api/veo', async (req, res) => {
     return;
   }
 
-  const { prompt, imageBase64, enableAudio = false } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number; enableAudio?: boolean;
+  const { prompt, imageBase64, enableAudio = false, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; enableAudio?: boolean; aspectRatio?: string;
   };
   if (!prompt || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt or imageBase64' });
@@ -389,7 +389,7 @@ app.post('/api/veo', async (req, res) => {
       prompt: p,
       imageUrls: [imageBase64],
       model: veoModel,
-      aspect_ratio: '16:9',
+      aspect_ratio: aspectRatio,
       generationType: 'REFERENCE_2_VIDEO',
     };
     if (enableAudio) body.enableAudio = true;
