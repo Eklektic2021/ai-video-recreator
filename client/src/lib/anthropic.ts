@@ -92,6 +92,46 @@ Always respond with a single valid JSON object matching this exact structure (no
 
 Generate scene analysis with 3-8 scenes depending on content length. Include only the platforms specified by the user. Make all prompts detailed, platform-specific, and immediately usable. Always include exactly 5 remixIdeas — creative variations of the original content with different scenes, styles, visual concepts, or moods that could inspire a fresh recreation.`;
 
+function str(v: unknown, fallback = ''): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+function sanitizeScene(raw: unknown): AnalysisResult['sceneAnalysis'][number] {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    scene: typeof s.scene === 'number' ? s.scene : 0,
+    timestamp: str(s.timestamp),
+    description: str(s.description),
+    cameraWork: str(s.cameraWork),
+    lighting: str(s.lighting),
+    mood: str(s.mood),
+    keyElements: Array.isArray(s.keyElements)
+      ? (s.keyElements as unknown[]).map((e) => str(e))
+      : [],
+  };
+}
+
+function sanitizeSFX(raw: unknown): AnalysisResult['sfxBreakdown'][number] {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    timestamp: str(s.timestamp),
+    sound: str(s.sound),
+    type: str(s.type, 'ambient'),
+    intensity: str(s.intensity, 'Medium'),
+    notes: str(s.notes),
+  };
+}
+
+function sanitizeRemixIdea(raw: unknown): NonNullable<AnalysisResult['remixIdeas']>[number] {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    title: str(r.title),
+    concept: str(r.concept),
+    style: str(r.style),
+    mood: str(r.mood),
+  };
+}
+
 function sanitizeAnalysisResult(raw: unknown): AnalysisResult {
   if (!raw || typeof raw !== 'object') {
     throw new Error(`Response is not an object (got ${typeof raw})`);
@@ -99,9 +139,15 @@ function sanitizeAnalysisResult(raw: unknown): AnalysisResult {
 
   const r = raw as Record<string, unknown>;
 
-  const sceneAnalysis = Array.isArray(r.sceneAnalysis) ? r.sceneAnalysis as AnalysisResult['sceneAnalysis'] : [];
-  const sfxBreakdown = Array.isArray(r.sfxBreakdown) ? r.sfxBreakdown as AnalysisResult['sfxBreakdown'] : [];
-  const remixIdeas = Array.isArray(r.remixIdeas) ? r.remixIdeas as AnalysisResult['remixIdeas'] : [];
+  const sceneAnalysis = Array.isArray(r.sceneAnalysis)
+    ? r.sceneAnalysis.map(sanitizeScene)
+    : [];
+  const sfxBreakdown = Array.isArray(r.sfxBreakdown)
+    ? r.sfxBreakdown.map(sanitizeSFX)
+    : [];
+  const remixIdeas = Array.isArray(r.remixIdeas)
+    ? r.remixIdeas.map(sanitizeRemixIdea)
+    : [];
   const videoPlatformPrompts =
     r.videoPlatformPrompts && typeof r.videoPlatformPrompts === 'object' && !Array.isArray(r.videoPlatformPrompts)
       ? r.videoPlatformPrompts as AnalysisResult['videoPlatformPrompts']
@@ -114,7 +160,7 @@ function sanitizeAnalysisResult(raw: unknown): AnalysisResult {
     r.editingInstructions && typeof r.editingInstructions === 'object' && !Array.isArray(r.editingInstructions)
       ? r.editingInstructions as AnalysisResult['editingInstructions']
       : {};
-  const coverArtPrompt = typeof r.coverArtPrompt === 'string' ? r.coverArtPrompt : '';
+  const coverArtPrompt = str(r.coverArtPrompt);
 
   if (sceneAnalysis.length === 0) console.warn('[runAnalysis] sceneAnalysis is empty after sanitization');
   if (sfxBreakdown.length === 0) console.warn('[runAnalysis] sfxBreakdown is empty after sanitization');

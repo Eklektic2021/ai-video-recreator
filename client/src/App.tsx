@@ -75,6 +75,21 @@ export default function App() {
     [handleFile]
   );
 
+  // Must be declared unconditionally at the top level — NOT inside {result && ...}
+  // because that would violate the Rules of Hooks (React error #310).
+  const handleUseRemixIdea = useCallback((concept: string) => {
+    setDescription(concept);
+    setTimeout(() => {
+      const el = descriptionRef.current;
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('description-textarea--flash');
+      void el.offsetWidth;
+      el.classList.add('description-textarea--flash');
+      el.addEventListener('animationend', () => el.classList.remove('description-textarea--flash'), { once: true });
+    }, 50);
+  }, []);
+
   const canAnalyze =
     !!apiKey &&
     !!videoFile &&
@@ -311,18 +326,7 @@ export default function App() {
               result={result}
               selectedPlatforms={platforms}
               description={description}
-              onUseRemixIdea={useCallback((concept: string) => {
-                setDescription(concept);
-                setTimeout(() => {
-                  const el = descriptionRef.current;
-                  if (!el) return;
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  el.classList.remove('description-textarea--flash');
-                  void el.offsetWidth; // force reflow to restart animation
-                  el.classList.add('description-textarea--flash');
-                  el.addEventListener('animationend', () => el.classList.remove('description-textarea--flash'), { once: true });
-                }, 50);
-              }, [])}
+              onUseRemixIdea={handleUseRemixIdea}
             />
           )}
         </main>
