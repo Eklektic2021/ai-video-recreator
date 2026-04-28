@@ -5,7 +5,8 @@ import {
   getStoredFalKey,
   getStoredGeminiKey,
   getStoredVideoReplicateKey,
-  getStoredKlingKey,
+  getStoredKlingAccessKey,
+  getStoredKlingSecretKey,
   generateWithRunwayAleph,
   generateWithKling2,
   generateWithKling2Native,
@@ -189,18 +190,20 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const falKey = getStoredFalKey();
   const geminiKey = getStoredGeminiKey();
   const videoReplicateKey = getStoredVideoReplicateKey();
-  const klingKey = getStoredKlingKey();
+  const klingAccessKey = getStoredKlingAccessKey();
+  const klingSecretKey = getStoredKlingSecretKey();
+  const klingFlag = (klingAccessKey && klingSecretKey) ? 'native' : '';
 
   const visibleProviders = PROVIDER_DEFS.filter(
-    (def) => !def.hideIfNoKey || def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)
+    (def) => !def.hideIfNoKey || def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag)
   );
 
   const currentDef = PROVIDER_DEFS.find((d) => d.id === provider)!;
-  const hasAnyKey = !!(kieKey || falKey || geminiKey || videoReplicateKey || klingKey);
+  const hasAnyKey = !!(kieKey || falKey || geminiKey || videoReplicateKey || klingFlag);
 
   const handleProviderChange = (p: Provider) => {
     const def = PROVIDER_DEFS.find((d) => d.id === p)!;
-    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)) return;
+    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag)) return;
     setProvider(p);
     if (def.durations.length > 0) setDuration(def.durations[0]);
   };
@@ -230,7 +233,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       needsAudio && !AUDIO_CAPABLE.includes(provider) && kieKey ? 'veo-full' : provider;
 
     const def = PROVIDER_DEFS.find((d) => d.id === effectiveProvider)!;
-    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)) return;
+    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag)) return;
 
     setVideoState(scene.scene, { loading: true, error: null, url: null, isImage: false });
     try {
@@ -240,13 +243,13 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
           url = await generateWithRunwayAleph(imageSource, prompt, kieKey, aspectRatio);
           break;
         case 'kling-2':
-          url = klingKey
-            ? await generateWithKling2Native(imageSource, prompt, klingKey, duration, aspectRatio)
+          url = klingFlag
+            ? await generateWithKling2Native(imageSource, prompt, klingAccessKey, klingSecretKey, duration, aspectRatio)
             : await generateWithKling2(imageSource, prompt, kieKey, duration, aspectRatio);
           break;
         case 'kling-3-audio':
-          url = klingKey
-            ? await generateWithKling3AudioNative(imageSource, prompt, klingKey, duration, aspectRatio)
+          url = klingFlag
+            ? await generateWithKling3AudioNative(imageSource, prompt, klingAccessKey, klingSecretKey, duration, aspectRatio)
             : falKey
             ? await generateWithKling3AudioFal(imageSource, prompt, falKey, duration, aspectRatio)
             : await generateWithKling3AudioKie(imageSource, prompt, kieKey, duration, aspectRatio);
@@ -275,7 +278,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Generation failed',
       });
     }
-  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, klingKey, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
+  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, klingAccessKey, klingSecretKey, klingFlag, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
 
   const generateAll = useCallback(async () => {
     if (!hasAnyKey || generatingAll) return;
@@ -299,8 +302,8 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         <div className="vidgen-controls">
           <div className="vidgen-provider-toggle">
             {visibleProviders.map((def) => {
-              const available = def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey);
-              const badge = def.getBadge(falKey, videoReplicateKey, klingKey);
+              const available = def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag);
+              const badge = def.getBadge(falKey, videoReplicateKey, klingFlag);
               return (
                 <button
                   key={def.id}

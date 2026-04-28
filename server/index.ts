@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createHmac, randomBytes } from 'crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -215,16 +216,34 @@ function falPoll<T>(
 
 // ── Kling native API helpers ──────────────────────────────────────────────────
 
+function generateKlingJWT(accessKey: string, secretKey: string): string {
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    iss: accessKey,
+    exp: now + 1800,
+    nbf: now,
+    iat: now,
+    jti: randomBytes(16).toString('hex'),
+  })).toString('base64url');
+  const sig = createHmac('sha256', secretKey)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+  return `${header}.${payload}.${sig}`;
+}
+
 async function klingNativeCreate(
-  klingKey: string,
+  accessKey: string,
+  secretKey: string,
   body: Record<string, unknown>,
   label: string
 ): Promise<string> {
+  const jwt = generateKlingJWT(accessKey, secretKey);
   const reqBody = JSON.stringify(body);
   console.log(`[${label}/native] → POST https://api.klingai.com/v1/videos/image2video | model: ${body.model_name} | prompt.length: ${String(body.prompt ?? '').length}`);
   const res = await fetch('https://api.klingai.com/v1/videos/image2video', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${klingKey}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
     body: reqBody,
   });
   const raw = await res.text();
@@ -245,12 +264,14 @@ async function klingNativeCreate(
 
 function klingNativePoll(
   taskId: string,
-  klingKey: string,
+  accessKey: string,
+  secretKey: string,
   label: string
 ): () => Promise<{ status: string; url?: string; error?: string }> {
   return async () => {
+    const jwt = generateKlingJWT(accessKey, secretKey);
     const r = await fetch(`https://api.klingai.com/v1/videos/image2video/${taskId}`, {
-      headers: { Authorization: `Bearer ${klingKey}` },
+      headers: { Authorization: `Bearer ${jwt}` },
     });
     const raw = await r.text();
     let body: { code?: number; data?: { task_status?: string; task_result?: { videos?: { url: string }[] }; task_status_msg?: string } };
@@ -550,9 +571,10 @@ app.post('/api/vidu', async (req, res) => {
 
 // ── /api/kling-native — Kling 2.1 via official Kling API ────────────────────
 app.post('/api/kling-native', async (req, res) => {
-  const klingKey = req.headers['x-kling-key'];
-  if (!klingKey || typeof klingKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kling-key header' }); return;
+  const accessKey = req.headers['x-kling-access-key'];
+  const secretKey = req.headers['x-kling-secret-key'];
+  if (!accessKey || typeof accessKey !== 'string' || !secretKey || typeof secretKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kling-access-key or x-kling-secret-key header' }); return;
   }
 
   const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
@@ -561,7 +583,7 @@ app.post('/api/kling-native', async (req, res) => {
   if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
   async function attemptKlingNative(p: string): Promise<string> {
-    const taskId = await klingNativeCreate(klingKey as string, {
+    const taskId = await klingNativeCreate(accessKey as string, secretKey as string, {
       model_name: 'kling-v2-1',
       image: imageBase64,
       prompt: p,
@@ -570,7 +592,7 @@ app.post('/api/kling-native', async (req, res) => {
       aspect_ratio: aspectRatio,
       mode: 'std',
     }, 'Kling2.1');
-    return pollUntilDone(klingNativePoll(taskId, klingKey as string, 'Kling2.1'));
+    return pollUntilDone(klingNativePoll(taskId, accessKey as string, secretKey as string, 'Kling2.1'));
   }
 
   try {
@@ -588,9 +610,10 @@ app.post('/api/kling-native', async (req, res) => {
 
 // ── /api/kling-audio-native — Kling 3.0 with audio via official Kling API ───
 app.post('/api/kling-audio-native', async (req, res) => {
-  const klingKey = req.headers['x-kling-key'];
-  if (!klingKey || typeof klingKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kling-key header' }); return;
+  const accessKey = req.headers['x-kling-access-key'];
+  const secretKey = req.headers['x-kling-secret-key'];
+  if (!accessKey || typeof accessKey !== 'string' || !secretKey || typeof secretKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kling-access-key or x-kling-secret-key header' }); return;
   }
 
   const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
@@ -599,8 +622,8 @@ app.post('/api/kling-audio-native', async (req, res) => {
   if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
   async function attemptKling3Native(p: string): Promise<string> {
-    const taskId = await klingNativeCreate(klingKey as string, {
-      model_name: 'kling-v3-1',
+    const taskId = await klingNativeCreate(accessKey as string, secretKey as string, {
+      model_name: 'kling-v3-0',
       image: imageBase64,
       prompt: p,
       negative_prompt: 'static image, frozen frame, slideshow, blurry, low quality, watermark',
@@ -608,7 +631,7 @@ app.post('/api/kling-audio-native', async (req, res) => {
       aspect_ratio: aspectRatio,
       mode: 'std',
     }, 'Kling3.0');
-    return pollUntilDone(klingNativePoll(taskId, klingKey as string, 'Kling3.0'));
+    return pollUntilDone(klingNativePoll(taskId, accessKey as string, secretKey as string, 'Kling3.0'));
   }
 
   try {

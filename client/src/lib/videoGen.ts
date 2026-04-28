@@ -1,9 +1,10 @@
 // ── Key storage ───────────────────────────────────────────────────────────────
-export const KIE_KEY_STORAGE       = 'kie_api_key';
-export const FAL_KEY_STORAGE       = 'fal_api_key';
-export const GEMINI_KEY_STORAGE    = 'gemini_api_key';
-export const REPLICATE_KEY_STORAGE = 'replicate_api_key';
-export const KLING_KEY_STORAGE     = 'kling_api_key';
+export const KIE_KEY_STORAGE            = 'kie_api_key';
+export const FAL_KEY_STORAGE            = 'fal_api_key';
+export const GEMINI_KEY_STORAGE         = 'gemini_api_key';
+export const REPLICATE_KEY_STORAGE      = 'replicate_api_key';
+export const KLING_ACCESS_KEY_STORAGE   = 'kling_access_key';
+export const KLING_SECRET_KEY_STORAGE   = 'kling_secret_key';
 
 export function getStoredKieKey(): string           { return localStorage.getItem(KIE_KEY_STORAGE) ?? ''; }
 export function saveKieKey(k: string): void         { localStorage.setItem(KIE_KEY_STORAGE, k.trim()); }
@@ -21,9 +22,13 @@ export function getStoredVideoReplicateKey(): string     { return localStorage.g
 export function saveVideoReplicateKey(k: string): void   { localStorage.setItem(REPLICATE_KEY_STORAGE, k.trim()); }
 export function clearVideoReplicateKey(): void           { localStorage.removeItem(REPLICATE_KEY_STORAGE); }
 
-export function getStoredKlingKey(): string  { return localStorage.getItem(KLING_KEY_STORAGE) ?? ''; }
-export function saveKlingKey(k: string): void { localStorage.setItem(KLING_KEY_STORAGE, k.trim()); }
-export function clearKlingKey(): void         { localStorage.removeItem(KLING_KEY_STORAGE); }
+export function getStoredKlingAccessKey(): string  { return localStorage.getItem(KLING_ACCESS_KEY_STORAGE) ?? ''; }
+export function saveKlingAccessKey(k: string): void { localStorage.setItem(KLING_ACCESS_KEY_STORAGE, k.trim()); }
+export function clearKlingAccessKey(): void         { localStorage.removeItem(KLING_ACCESS_KEY_STORAGE); }
+
+export function getStoredKlingSecretKey(): string  { return localStorage.getItem(KLING_SECRET_KEY_STORAGE) ?? ''; }
+export function saveKlingSecretKey(k: string): void { localStorage.setItem(KLING_SECRET_KEY_STORAGE, k.trim()); }
+export function clearKlingSecretKey(): void         { localStorage.removeItem(KLING_SECRET_KEY_STORAGE); }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export async function ensureBase64(imageSource: string): Promise<string> {
@@ -194,14 +199,19 @@ export async function generateWithFluxReplicate(
 export async function generateWithKling2Native(
   imageSource: string,
   prompt: string,
-  klingKey: string,
+  klingAccessKey: string,
+  klingSecretKey: string,
   duration = 5,
   aspectRatio = '16:9'
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/kling-native', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-kling-key': klingKey },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-kling-access-key': klingAccessKey,
+      'x-kling-secret-key': klingSecretKey,
+    },
     body: JSON.stringify({ prompt, imageBase64: base64, duration, aspectRatio }),
   });
   await throwOnError(res, 'Kling 2.1 Native');
@@ -211,14 +221,19 @@ export async function generateWithKling2Native(
 export async function generateWithKling3AudioNative(
   imageSource: string,
   prompt: string,
-  klingKey: string,
+  klingAccessKey: string,
+  klingSecretKey: string,
   duration = 5,
   aspectRatio = '16:9'
 ): Promise<string> {
   const base64 = await ensureBase64(imageSource);
   const res = await fetch('/api/kling-audio-native', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-kling-key': klingKey },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-kling-access-key': klingAccessKey,
+      'x-kling-secret-key': klingSecretKey,
+    },
     body: JSON.stringify({ prompt, imageBase64: base64, duration, aspectRatio }),
   });
   await throwOnError(res, 'Kling 3.0 Native');
