@@ -27,17 +27,48 @@ function stripDataPrefix(dataUri: string): string {
   return idx !== -1 ? dataUri.slice(idx + 1) : dataUri;
 }
 
-// Converts a base64 data URI to a File object for FormData
-function base64ToFile(dataUri: string, filename: string): File {
-  const comma = dataUri.indexOf(',');
-  const header = dataUri.slice(0, comma);
-  const b64 = dataUri.slice(comma + 1);
-  const mimeMatch = header.match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : 'image/png';
-  const bytes = atob(b64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  return new File([arr], filename, { type: mime });
+/**
+ * Converts any image data URI to a proper PNG File using a canvas.
+ * gpt-image-1 /edits requires actual PNG file buffers — passing JPEG or WebP
+ * data with a renamed .png filename is rejected with 400.
+ */
+function toRgbaPng(dataUri: string, maxPx = 1920): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || maxPx;
+      const h = img.naturalHeight || maxPx;
+      const scale = Math.min(1, maxPx / Math.max(w, h));
+      const cw = Math.round(w * scale);
+      const ch = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas 2D context unavailable')); return; }
+      ctx.drawImage(img, 0, 0, cw, ch);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error('canvas.toBlob returned null')); return; }
+          resolve(new File([blob], 'reference.png', { type: 'image/png' }));
+        },
+        'image/png',
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load reference image for PNG conversion'));
+    img.src = dataUri;
+  });
+}
+
+async function parseOrThrow(res: Response, label: string): Promise<void> {
+  const body = await res.text().catch(() => '(response body unavailable)');
+  console.error(`[generateWithDalle] ${label} ${res.status}:`, body);
+  let msg = `OpenAI error ${res.status}`;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } };
+    if (parsed?.error?.message) msg = parsed.error.message;
+  } catch { /* body wasn't JSON */ }
+  throw new Error(msg);
 }
 
 function parseOpenAIImage(data: { data: { url?: string; b64_json?: string }[] }): string {
@@ -55,7 +86,7 @@ export async function generateWithDalle(
   const hasRefs = refImages.length > 0;
 
   if (!hasRefs) {
-    // No reference images — standard generations endpoint
+    // No reference images — standard generations endpoint (JSON body)
     const res = await fetch('https://api.openai.com/v1/images/generations', {
       method: 'POST',
       headers: {
@@ -70,18 +101,20 @@ export async function generateWithDalle(
         quality: 'standard',
       }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(err?.error?.message ?? `OpenAI error ${res.status}`);
-    }
+    if (!res.ok) await parseOrThrow(res, 'POST /v1/images/generations');
     return parseOpenAIImage(await res.json() as { data: { url?: string; b64_json?: string }[] });
   }
 
-  // Reference images provided — use edits endpoint with multipart FormData
+  // Reference images provided — edits endpoint requires multipart/form-data with a
+  // real PNG file buffer.  Convert now, regardless of the original upload format.
+  const pngFile = await toRgbaPng(refImages[0]);
+
   const finalPrompt = `STRICT IDENTITY LOCK — ABSOLUTE REQUIREMENT: Reproduce the character from the reference image with exact accuracy. The face must be a perfect replica: identical bone structure, eye shape and color, nose, lips, skin tone, and jawline. Hair must match exactly: same color, style, length, and texture. Clothing and accessories must match the reference precisely. Do NOT reinterpret, stylize, or approximate any facial feature. Now render this scene with that exact character: ${prompt}`;
+
   const form = new FormData();
   form.append('model', 'gpt-image-1');
-  form.append('image', base64ToFile(refImages[0], 'reference.png'));
+  // Field name is "image[]" for gpt-image-1 multi-image edits; single image still works
+  form.append('image[]', pngFile);
   form.append('prompt', finalPrompt);
   form.append('size', '1024x1024');
   form.append('n', '1');
@@ -89,15 +122,12 @@ export async function generateWithDalle(
   const res = await fetch('https://api.openai.com/v1/images/edits', {
     method: 'POST',
     headers: {
-      // No Content-Type — browser sets it automatically with the correct multipart boundary
+      // Do NOT set Content-Type — the browser must set it with the multipart boundary
       Authorization: `Bearer ${apiKey}`,
     },
     body: form,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
-    throw new Error(err?.error?.message ?? `OpenAI error ${res.status}`);
-  }
+  if (!res.ok) await parseOrThrow(res, 'POST /v1/images/edits');
   return parseOpenAIImage(await res.json() as { data: { url?: string; b64_json?: string }[] });
 }
 

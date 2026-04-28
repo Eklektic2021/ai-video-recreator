@@ -119,10 +119,13 @@ export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
   const generateAll = useCallback(async () => {
     if (missingKey || generatingAll) return;
     setGeneratingAll(true);
-    for (const scene of scenes) {
-      await generateOne(scene);
+    try {
+      for (const scene of scenes) {
+        await generateOne(scene);
+      }
+    } finally {
+      setGeneratingAll(false);
     }
-    setGeneratingAll(false);
   }, [missingKey, generatingAll, scenes, generateOne]);
 
   const hasRefs = refImages.length > 0;
