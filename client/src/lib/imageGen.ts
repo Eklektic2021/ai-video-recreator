@@ -109,7 +109,7 @@ export async function generateWithDalle(
   // real PNG file buffer.  Convert now, regardless of the original upload format.
   const pngFile = await toRgbaPng(refImages[0]);
 
-  const finalPrompt = `STRICT IDENTITY LOCK — ABSOLUTE REQUIREMENT: Reproduce the character from the reference image with exact accuracy. The face must be a perfect replica: identical bone structure, eye shape and color, nose, lips, skin tone, and jawline. Hair must match exactly: same color, style, length, and texture. Clothing and accessories must match the reference precisely. Do NOT reinterpret, stylize, or approximate any facial feature. Now render this scene with that exact character: ${prompt}`;
+  const finalPrompt = `Using the reference image as the character identity source (maintain exact face, hair, skin tone, and body — do not alter any physical feature), render only the following scene change: ${prompt}`;
 
   const form = new FormData();
   form.append('model', 'gpt-image-1');

@@ -29,14 +29,15 @@ async function pollUntilDone(
 // Character Lock — prepended to every video prompt
 function wrapPrompt(raw: string): string {
   return (
-    '⚠ IDENTITY LOCK — NON-NEGOTIABLE: The character in every frame MUST be a perfect visual replica of the character in the reference image.\n' +
-    'FACE: Reproduce exact bone structure, eye shape + color, nose bridge + tip, lip shape + fullness, skin tone, cheekbone height, jawline, brow thickness + arch. DO NOT substitute a different face model.\n' +
-    'HAIR: Match exact color, style, length, texture, parting, and all hair accessories — no variation allowed.\n' +
-    'BODY + CLOTHING: Match exact build, clothing, jewelry, and accessories from the reference.\n' +
-    'CONSISTENCY: Character appearance must be 100% identical in every frame — no drift, morph, or gradual change.\n' +
-    'COUNT: Same number of people as the reference — do not add or remove characters.\n\n' +
+    '⚠ ABSOLUTE IDENTITY LOCK — NON-NEGOTIABLE: Every frame MUST feature the EXACT same person shown in the reference image — the identical individual, not a look-alike or substitute.\n' +
+    'SAME FACE: Reproduce the exact facial structure — identical bone structure, eye shape + color, nose shape + bridge, lip shape + fullness, skin tone, cheekbones, jawline, brow thickness + arch. Any facial variation is prohibited.\n' +
+    'SAME HAIR: Exact hair color, length, style, texture, parting, and accessories — zero changes allowed.\n' +
+    'SAME BODY: Identical build, height proportions, skin tone throughout every frame. Same clothing, jewelry, and accessories as the reference.\n' +
+    'SAME PERSON — NO SUBSTITUTION: Do not cast, render, or infer a different person. This is the only character permitted in this scene.\n' +
+    'MOTION REQUIRED: The character must move naturally and fluidly — no frozen frames, no static poses, no slideshow transitions.\n' +
+    'FRAME CONSISTENCY: Character appearance must be 100% identical across all frames — zero drift, morphing, or gradual change between frames.\n\n' +
     `${raw}\n\n` +
-    'NEGATIVE: wrong face, different person, face drift, morphing features, character substitution, wrong skin tone, wrong hair, extra characters, missing characters, static image, frozen frame, slideshow, distorted features, blurry faces, watermark.'
+    'ABSOLUTE NEGATIVES: different person, wrong face, face substitution, wrong skin tone, wrong hair color, wrong hair style, face drift, character morph, extra characters, missing characters, static image, frozen frame, no motion, slideshow, watermark, blurry faces.'
   );
 }
 
@@ -240,8 +241,8 @@ async function klingNativeCreate(
 ): Promise<string> {
   const jwt = generateKlingJWT(accessKey, secretKey);
   const reqBody = JSON.stringify(body);
-  console.log(`[${label}/native] → POST https://api.klingai.com/v1/videos/image2video | model: ${body.model_name} | prompt.length: ${String(body.prompt ?? '').length}`);
-  const res = await fetch('https://api.klingai.com/v1/videos/image2video', {
+  console.log(`[${label}/native] → POST https://api-singapore.klingai.com/v1/videos/image2video | model: ${body.model_name} | prompt.length: ${String(body.prompt ?? '').length}`);
+  const res = await fetch('https://api-singapore.klingai.com/v1/videos/image2video', {
     method: 'POST',
     headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
     body: reqBody,
@@ -270,7 +271,7 @@ function klingNativePoll(
 ): () => Promise<{ status: string; url?: string; error?: string }> {
   return async () => {
     const jwt = generateKlingJWT(accessKey, secretKey);
-    const r = await fetch(`https://api.klingai.com/v1/videos/image2video/${taskId}`, {
+    const r = await fetch(`https://api-singapore.klingai.com/v1/videos/image2video/${taskId}`, {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     const raw = await r.text();
@@ -583,9 +584,10 @@ app.post('/api/kling-native', async (req, res) => {
   if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
   async function attemptKlingNative(p: string): Promise<string> {
+    const rawBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
     const taskId = await klingNativeCreate(accessKey as string, secretKey as string, {
       model_name: 'kling-v2-1',
-      image: imageBase64,
+      image: rawBase64,
       prompt: p,
       negative_prompt: 'static image, frozen frame, slideshow, blurry, low quality, watermark',
       duration: String(duration),
@@ -622,9 +624,10 @@ app.post('/api/kling-audio-native', async (req, res) => {
   if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
   async function attemptKling3Native(p: string): Promise<string> {
+    const rawBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
     const taskId = await klingNativeCreate(accessKey as string, secretKey as string, {
-      model_name: 'kling-v3-0',
-      image: imageBase64,
+      model_name: 'kling-v3',
+      image: rawBase64,
       prompt: p,
       negative_prompt: 'static image, frozen frame, slideshow, blurry, low quality, watermark',
       duration: String(duration),
@@ -782,7 +785,7 @@ app.post('/api/veo-gemini', async (req, res) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          instances: [{ prompt: p, image: { bytesBase64Encoded: rawBase64 } }],
+          instances: [{ prompt: p, image: { bytesBase64Encoded: rawBase64, mimeType: 'image/jpeg' } }],
           parameters: { aspectRatio, durationSeconds: 8 },
         }),
       }
@@ -826,6 +829,102 @@ app.post('/api/veo-gemini', async (req, res) => {
         catch { res.status(400).json({ error: safetyMessage('Veo 3.1 Direct') }); return; }
       } else { throw e; }
     }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/kling-omni-native — Kling Omni 3.1 via official Kling API ───────────
+app.post('/api/kling-omni-native', async (req, res) => {
+  const accessKey = req.headers['x-kling-access-key'];
+  const secretKey = req.headers['x-kling-secret-key'];
+  if (!accessKey || typeof accessKey !== 'string' || !secretKey || typeof secretKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kling-access-key or x-kling-secret-key header' }); return;
+  }
+
+  const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  async function attemptKlingOmni(p: string): Promise<string> {
+    const rawBase64 = imageBase64!.includes(',') ? imageBase64!.split(',')[1] : imageBase64!;
+    const taskId = await klingNativeCreate(accessKey as string, secretKey as string, {
+      model_name: 'kling-v3',
+      image: rawBase64,
+      prompt: p,
+      negative_prompt: 'static image, frozen frame, slideshow, blurry, low quality, watermark',
+      duration: String(duration),
+      aspect_ratio: aspectRatio,
+      mode: 'pro',
+      cfg_scale: 0.5,
+    }, 'KlingOmni');
+    return pollUntilDone(klingNativePoll(taskId, accessKey as string, secretKey as string, 'KlingOmni'));
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptKlingOmni(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptKlingOmni(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Kling Omni 3.1') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/udio — Udio music via KIE ───────────────────────────────────────────
+app.post('/api/udio', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, instrumental = false } = req.body as {
+    prompt?: string; instrumental?: boolean;
+  };
+  if (!prompt) { res.status(400).json({ error: 'Missing prompt' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  try {
+    const createRes = await fetch('https://api.kie.ai/api/v1/udio/create', {
+      method: 'POST',
+      headers: kieHdr,
+      body: JSON.stringify({ prompt, instrumental }),
+    });
+    const createRaw = await createRes.text();
+    console.log(`[Udio] create status=${createRes.status} body=${createRaw.slice(0, 300)}`);
+
+    let cp: { code?: number; message?: string; data?: { workId?: string } };
+    try { cp = JSON.parse(createRaw); }
+    catch { throw new Error(`Udio error ${createRes.status}: ${createRaw.slice(0, 200)}`); }
+
+    if (!createRes.ok || (cp.code !== undefined && cp.code !== 200 && cp.code !== 0)) {
+      throw new Error(cp.message ?? `Udio error ${createRes.status}`);
+    }
+
+    const workId = cp.data?.workId;
+    if (!workId) throw new Error('Udio did not return a workId');
+    console.log(`[Udio] workId=${workId}`);
+
+    const url = await pollUntilDone(async () => {
+      const r = await fetch(`https://api.kie.ai/api/v1/udio/record-info?workId=${workId}`, { headers: kieHdr });
+      const body = await r.json() as {
+        code?: number;
+        data?: { status?: string; tracks?: { audioUrl?: string }[]; audioUrl?: string };
+      };
+      const data = body.data ?? {};
+      const st = (data.status ?? '').toLowerCase();
+      console.log(`[Udio] poll status=${st}`);
+      if (st === 'completed' || st === 'success' || st === 'succeeded') {
+        return { status: 'done', url: data.tracks?.[0]?.audioUrl ?? data.audioUrl };
+      }
+      if (st === 'failed' || st === 'error') return { status: 'failed', error: 'Udio generation failed' };
+      return { status: 'pending' };
+    }, 60, 5000);
+
     res.json({ url });
   } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });

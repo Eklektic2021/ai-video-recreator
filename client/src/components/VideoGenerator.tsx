@@ -13,6 +13,7 @@ import {
   generateWithKling3AudioKie,
   generateWithKling3AudioFal,
   generateWithKling3AudioNative,
+  generateWithKlingOmniNative,
   generateWithVeoFast,
   generateWithVeoFull,
   generateWithVeoDirect,
@@ -25,6 +26,7 @@ type Provider =
   | 'kling-2'
   | 'kling-3-audio'
   | 'kling-3-fal'
+  | 'kling-omni'
   | 'veo-fast'
   | 'veo-full'
   | 'veo-direct'
@@ -82,6 +84,15 @@ const PROVIDER_DEFS: ProviderDef[] = [
     hideIfNoKey: true,
     durations: [5, 10],
     noKeyMsg: 'Add your fal.ai API key to use Kling 3.0 via fal.ai',
+  },
+  {
+    id: 'kling-omni',
+    label: 'Kling Omni 3.1',
+    getBadge: () => 'Kling',
+    isAvailable: (_kie, _fal, _gemini, _replicate, kling) => !!kling,
+    hideIfNoKey: true,
+    durations: [5, 10],
+    noKeyMsg: 'Add your Kling AI access key + secret key to use Kling Omni 3.1',
   },
   {
     id: 'veo-fast',
@@ -179,7 +190,7 @@ async function downloadMedia(url: string, sceneNum: number, isImage: boolean) {
   }
 }
 
-const AUDIO_CAPABLE: Provider[] = ['kling-3-audio', 'kling-3-fal', 'veo-full', 'veo-direct'];
+const AUDIO_CAPABLE: Provider[] = ['kling-3-audio', 'kling-3-fal', 'kling-omni', 'veo-full', 'veo-direct'];
 
 interface Props {
   scenes: SceneAnalysis[];
@@ -266,6 +277,9 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
           break;
         case 'kling-3-fal':
           url = await generateWithKling3AudioFal(imageSource, prompt, falKey, duration, aspectRatio);
+          break;
+        case 'kling-omni':
+          url = await generateWithKlingOmniNative(imageSource, prompt, klingAccessKey, klingSecretKey, duration, aspectRatio);
           break;
         case 'veo-fast':
           url = await generateWithVeoFast(imageSource, prompt, kieKey, aspectRatio);

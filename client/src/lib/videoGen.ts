@@ -239,3 +239,25 @@ export async function generateWithKling3AudioNative(
   await throwOnError(res, 'Kling 3.0 Native');
   return (await res.json() as { url: string }).url;
 }
+
+export async function generateWithKlingOmniNative(
+  imageSource: string,
+  prompt: string,
+  klingAccessKey: string,
+  klingSecretKey: string,
+  duration = 5,
+  aspectRatio = '16:9'
+): Promise<string> {
+  const base64 = await ensureBase64(imageSource);
+  const res = await fetch('/api/kling-omni-native', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-kling-access-key': klingAccessKey,
+      'x-kling-secret-key': klingSecretKey,
+    },
+    body: JSON.stringify({ prompt, imageBase64: base64, duration, aspectRatio }),
+  });
+  await throwOnError(res, 'Kling Omni 3.1 Native');
+  return (await res.json() as { url: string }).url;
+}

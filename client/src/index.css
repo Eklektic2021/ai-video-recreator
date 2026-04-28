@@ -2670,6 +2670,53 @@ body.light-mode {
   width: 100%;
   accent-color: var(--cyan);
 }
+.musicgen-genre-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.musicgen-genre-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  flex: 1;
+}
+.musicgen-genre-pill {
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.musicgen-genre-pill:hover { border-color: var(--cyan); color: var(--cyan); }
+.musicgen-genre-pill--active {
+  background: rgba(0,217,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.musicgen-bpm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.musicgen-bpm-slider {
+  flex: 1;
+  accent-color: var(--cyan);
+  cursor: pointer;
+  height: 4px;
+}
+.musicgen-bpm-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--cyan);
+  min-width: 2.5rem;
+  text-align: right;
+}
 .light-mode .musicgen-title { color: #1a1a2e; }
 .light-mode .musicgen-subtitle { color: #555; }
 .light-mode .musicgen-row-label { color: #555; }

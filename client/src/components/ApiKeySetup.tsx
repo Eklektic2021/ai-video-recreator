@@ -141,7 +141,7 @@ export default function ApiKeySetup({ onSave }: Props) {
 
         {/* ── Replicate (optional) ── */}
         <p className="apikey-field-label">
-          Replicate API Key <span className="apikey-optional">for FLUX Schnell</span>
+          Replicate API Key <span className="apikey-optional">for FLUX Schnell &amp; FLUX Dev</span>
         </p>
         <div className="apikey-input-wrap">
           <input
