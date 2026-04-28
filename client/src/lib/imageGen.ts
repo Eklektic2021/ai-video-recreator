@@ -78,7 +78,7 @@ export async function generateWithDalle(
   }
 
   // Reference images provided — use edits endpoint with multipart FormData
-  const finalPrompt = `Generate this scene maintaining exact consistency with the reference character(s): ${prompt}`;
+  const finalPrompt = `STRICT IDENTITY LOCK — ABSOLUTE REQUIREMENT: Reproduce the character from the reference image with exact accuracy. The face must be a perfect replica: identical bone structure, eye shape and color, nose, lips, skin tone, and jawline. Hair must match exactly: same color, style, length, and texture. Clothing and accessories must match the reference precisely. Do NOT reinterpret, stylize, or approximate any facial feature. Now render this scene with that exact character: ${prompt}`;
   const form = new FormData();
   form.append('model', 'gpt-image-1');
   form.append('image', base64ToFile(refImages[0], 'reference.png'));

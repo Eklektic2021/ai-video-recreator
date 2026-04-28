@@ -235,6 +235,12 @@ body {
 }
 .textarea::placeholder,
 .description-textarea::placeholder { color: var(--text-3); }
+@keyframes textarea-flash {
+  0%   { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,217,255,0.3); }
+  60%  { border-color: var(--cyan); box-shadow: 0 0 0 5px rgba(0,217,255,0.1); }
+  100% { border-color: var(--border); box-shadow: none; }
+}
+.description-textarea--flash { animation: textarea-flash 1.4s ease forwards; }
 .textarea:focus,
 .description-textarea:focus {
   border-color: var(--border-active);

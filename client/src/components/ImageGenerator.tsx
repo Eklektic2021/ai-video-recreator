@@ -96,7 +96,10 @@ export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
       if (!key) return;
       setImageState(scene.scene, { loading: true, error: null, url: null });
       try {
-        const prompt = buildPrompt(scene);
+        const rawPrompt = buildPrompt(scene);
+        const prompt = refImages.length > 0
+          ? `STRICT IDENTITY LOCK: All character faces must exactly match the reference image — same facial structure, eyes, nose, lips, skin tone, hair color, hair style. Do not alter any facial feature. Then render this scene: ${rawPrompt}`
+          : rawPrompt;
         const url =
           provider === 'dalle'
             ? await generateWithDalle(key, prompt, refImages)

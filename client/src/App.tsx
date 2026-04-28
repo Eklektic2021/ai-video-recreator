@@ -34,6 +34,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   // Re-read from localStorage on mount in case useState lazy-init ran before
   // storage was readable (e.g. browser extension interference or hydration quirks)
@@ -245,6 +246,7 @@ export default function App() {
           <div className="card">
             <h2 className="card-title">Describe Your Vision</h2>
             <textarea
+              ref={descriptionRef}
               className="description-textarea"
               placeholder="Describe what you're trying to recreate or achieve with this video. What's the style, tone, and purpose? The more detail you provide, the better the generated prompts will be."
               value={description}
@@ -292,7 +294,18 @@ export default function App() {
               result={result}
               selectedPlatforms={platforms}
               description={description}
-              onUseRemixIdea={(concept) => setDescription(concept)}
+              onUseRemixIdea={useCallback((concept: string) => {
+                setDescription(concept);
+                setTimeout(() => {
+                  const el = descriptionRef.current;
+                  if (!el) return;
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.classList.remove('description-textarea--flash');
+                  void el.offsetWidth; // force reflow to restart animation
+                  el.classList.add('description-textarea--flash');
+                  el.addEventListener('animationend', () => el.classList.remove('description-textarea--flash'), { once: true });
+                }, 50);
+              }, [])}
             />
           )}
         </main>

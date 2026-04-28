@@ -5,10 +5,13 @@ import {
   getStoredFalKey,
   getStoredGeminiKey,
   getStoredVideoReplicateKey,
+  getStoredKlingKey,
   generateWithRunwayAleph,
   generateWithKling2,
+  generateWithKling2Native,
   generateWithKling3AudioKie,
   generateWithKling3AudioFal,
+  generateWithKling3AudioNative,
   generateWithVeoFast,
   generateWithVeoFull,
   generateWithVeoDirect,
@@ -35,8 +38,8 @@ interface VideoState {
 interface ProviderDef {
   id: Provider;
   label: string;
-  getBadge: (falKey: string, replicateKey: string) => string;
-  isAvailable: (kie: string, fal: string, gemini: string, replicate: string) => boolean;
+  getBadge: (falKey: string, replicateKey: string, klingKey: string) => string;
+  isAvailable: (kie: string, fal: string, gemini: string, replicate: string, kling: string) => boolean;
   hideIfNoKey?: boolean;
   durations: number[];
   fixedDuration?: number;
@@ -56,18 +59,18 @@ const PROVIDER_DEFS: ProviderDef[] = [
   {
     id: 'kling-2',
     label: 'Kling 2.1',
-    getBadge: () => 'KIE',
-    isAvailable: (kie) => !!kie,
+    getBadge: (_f, _r, kling) => (kling ? 'Kling' : 'KIE'),
+    isAvailable: (kie, _f, _g, _r, kling) => !!(kie || kling),
     durations: [5, 10],
-    noKeyMsg: 'Add your KIE AI API key to use Kling 2.1',
+    noKeyMsg: 'Add your Kling AI or KIE AI API key to use Kling 2.1',
   },
   {
     id: 'kling-3-audio',
     label: 'Kling 3.0 🎙️',
-    getBadge: (fal) => (fal ? 'fal.ai' : 'KIE'),
-    isAvailable: (kie, fal) => !!(kie || fal),
+    getBadge: (fal, _r, kling) => (kling ? 'Kling' : fal ? 'fal.ai' : 'KIE'),
+    isAvailable: (kie, fal, _g, _r, kling) => !!(kie || fal || kling),
     durations: [5, 10],
-    noKeyMsg: 'Add your KIE AI or fal.ai API key to use Kling 3.0',
+    noKeyMsg: 'Add your Kling AI, KIE AI, or fal.ai API key to use Kling 3.0',
   },
   {
     id: 'veo-fast',
@@ -134,12 +137,15 @@ const PLATFORMS: { id: Platform; label: string; ratio: AspectRatio; directive: s
 ];
 
 function buildPrompt(scene: SceneAnalysis): string {
+  const bg = scene.keyElements.length
+    ? scene.keyElements.join(', ')
+    : 'cinematic environment matching scene context';
   return [
-    scene.description,
-    `Camera: ${scene.cameraWork}`,
-    `Lighting: ${scene.lighting}`,
-    `Mood: ${scene.mood}`,
-  ].join('. ');
+    `FOREGROUND: ${scene.description}`,
+    `BACKGROUND: ${bg}`,
+    `CAMERA: ${scene.cameraWork}`,
+    `LIGHTING: ${scene.lighting}. Mood: ${scene.mood}`,
+  ].join('\n');
 }
 
 function hasDialogue(text: string): boolean {
@@ -183,17 +189,18 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const falKey = getStoredFalKey();
   const geminiKey = getStoredGeminiKey();
   const videoReplicateKey = getStoredVideoReplicateKey();
+  const klingKey = getStoredKlingKey();
 
   const visibleProviders = PROVIDER_DEFS.filter(
-    (def) => !def.hideIfNoKey || def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey)
+    (def) => !def.hideIfNoKey || def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)
   );
 
   const currentDef = PROVIDER_DEFS.find((d) => d.id === provider)!;
-  const hasAnyKey = !!(kieKey || falKey || geminiKey || videoReplicateKey);
+  const hasAnyKey = !!(kieKey || falKey || geminiKey || videoReplicateKey || klingKey);
 
   const handleProviderChange = (p: Provider) => {
     const def = PROVIDER_DEFS.find((d) => d.id === p)!;
-    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey)) return;
+    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)) return;
     setProvider(p);
     if (def.durations.length > 0) setDuration(def.durations[0]);
   };
@@ -223,7 +230,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       needsAudio && !AUDIO_CAPABLE.includes(provider) && kieKey ? 'veo-full' : provider;
 
     const def = PROVIDER_DEFS.find((d) => d.id === effectiveProvider)!;
-    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey)) return;
+    if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey)) return;
 
     setVideoState(scene.scene, { loading: true, error: null, url: null, isImage: false });
     try {
@@ -233,10 +240,14 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
           url = await generateWithRunwayAleph(imageSource, prompt, kieKey, aspectRatio);
           break;
         case 'kling-2':
-          url = await generateWithKling2(imageSource, prompt, kieKey, duration, aspectRatio);
+          url = klingKey
+            ? await generateWithKling2Native(imageSource, prompt, klingKey, duration, aspectRatio)
+            : await generateWithKling2(imageSource, prompt, kieKey, duration, aspectRatio);
           break;
         case 'kling-3-audio':
-          url = falKey
+          url = klingKey
+            ? await generateWithKling3AudioNative(imageSource, prompt, klingKey, duration, aspectRatio)
+            : falKey
             ? await generateWithKling3AudioFal(imageSource, prompt, falKey, duration, aspectRatio)
             : await generateWithKling3AudioKie(imageSource, prompt, kieKey, duration, aspectRatio);
           break;
@@ -264,7 +275,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Generation failed',
       });
     }
-  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
+  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, klingKey, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
 
   const generateAll = useCallback(async () => {
     if (!hasAnyKey || generatingAll) return;
@@ -288,8 +299,8 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         <div className="vidgen-controls">
           <div className="vidgen-provider-toggle">
             {visibleProviders.map((def) => {
-              const available = def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey);
-              const badge = def.getBadge(falKey, videoReplicateKey);
+              const available = def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey);
+              const badge = def.getBadge(falKey, videoReplicateKey, klingKey);
               return (
                 <button
                   key={def.id}
@@ -419,7 +430,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
             needsAudio && !AUDIO_CAPABLE.includes(provider) && kieKey ? 'veo-full' : provider;
           const effectiveDef = PROVIDER_DEFS.find((d) => d.id === effectiveProvider)!;
           const effectiveDuration = effectiveDef.fixedDuration ?? duration;
-          const canGenerate = !!imageUrl && effectiveDef.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey);
+          const canGenerate = !!imageUrl && effectiveDef.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey);
 
           return (
             <div key={scene.scene} className="vidgen-scene-card">

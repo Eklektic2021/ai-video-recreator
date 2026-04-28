@@ -11,6 +11,7 @@ import {
   getStoredFalKey, saveFalKey,
   getStoredGeminiKey, saveGeminiKey,
   getStoredVideoReplicateKey, saveVideoReplicateKey,
+  getStoredKlingKey, saveKlingKey,
 } from '../lib/videoGen';
 
 interface Props {
@@ -30,6 +31,9 @@ export default function ApiKeySetup({ onSave }: Props) {
 
   const [kieKey, setKieKey] = useState(getStoredKieKey);
   const [showKie, setShowKie] = useState(false);
+
+  const [klingKey, setKlingKey] = useState(getStoredKlingKey);
+  const [showKling, setShowKling] = useState(false);
 
   const [falKey, setFalKey] = useState(getStoredFalKey);
   const [showFal, setShowFal] = useState(false);
@@ -54,6 +58,7 @@ export default function ApiKeySetup({ onSave }: Props) {
     if (openaiKey.trim()) saveOpenAIKey(openaiKey);
     if (replicateKey.trim()) saveReplicateKey(replicateKey);
     if (kieKey.trim()) saveKieKey(kieKey);
+    if (klingKey.trim()) saveKlingKey(klingKey);
     if (falKey.trim()) saveFalKey(falKey);
     if (videoReplicateKey.trim()) saveVideoReplicateKey(videoReplicateKey);
     if (geminiKey.trim()) saveGeminiKey(geminiKey);
@@ -178,6 +183,29 @@ export default function ApiKeySetup({ onSave }: Props) {
         <p className="apikey-link-text">
           <a href="https://kie.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
             Get KIE AI key ↗
+          </a>
+        </p>
+
+        {/* ── Kling native (optional) ── */}
+        <p className="apikey-field-label">
+          Kling AI API Key <span className="apikey-optional">native Kling 2.1 &amp; 3.0 direct</span>
+        </p>
+        <div className="apikey-input-wrap">
+          <input
+            className="apikey-input"
+            type={showKling ? 'text' : 'password'}
+            placeholder="kling_..."
+            value={klingKey}
+            onChange={(e) => setKlingKey(e.target.value)}
+            spellCheck={false}
+          />
+          <button className="apikey-toggle" type="button" onClick={() => setShowKling((s) => !s)} tabIndex={-1}>
+            {showKling ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <p className="apikey-link-text">
+          <a href="https://klingai.com/dev/user/api-keys" target="_blank" rel="noreferrer" className="apikey-link">
+            Get Kling AI key ↗
           </a>
         </p>
 
