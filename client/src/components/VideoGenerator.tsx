@@ -159,14 +159,13 @@ const PLATFORMS: { id: Platform; label: string; ratio: AspectRatio; directive: s
 ];
 
 function buildPrompt(scene: SceneAnalysis): string {
-  const bg = scene.keyElements.length
-    ? scene.keyElements.join(', ')
-    : 'cinematic environment matching scene context';
+  const envItems = scene.keyElements.filter((el) => !CHAR_ATTR.test(el));
+  const bg = envItems.length ? envItems.join(', ') : 'cinematic environment';
   return [
     `FOREGROUND: ${scene.description}`,
     `BACKGROUND: ${bg}`,
     `CAMERA: ${scene.cameraWork}`,
-    `LIGHTING: ${scene.lighting}. Mood: ${scene.mood}`,
+    `LIGHTING: ${scene.lighting}, ${scene.mood} mood`,
   ].join('\n');
 }
 
@@ -192,13 +191,17 @@ async function downloadMedia(url: string, sceneNum: number, isImage: boolean) {
 
 const AUDIO_CAPABLE: Provider[] = ['kling-3-audio', 'kling-3-fal', 'kling-omni', 'veo-full', 'veo-direct'];
 
+// Filters keyElements to environment/setting only — strips character appearance terms
+const CHAR_ATTR = /\b(lipstick|lip\s*gloss|blush|eyeshadow|mascara|make\s*up|makeup|contour|eyeliner|brow|lash|hoops|earring|necklace|pendant|chain|bracelet|ring|bangle|anklet|jewelry|jewellery|tattoo|piercing|skin\s*tone|complexion|hair|braid|ponytail|curl|wave|blonde|brunette|redhead|beard|mustache|stubble|goatee|freckle|mole|dimple)\b/i;
+
 interface Props {
   scenes: SceneAnalysis[];
   generatedImages: Record<number, string>;
+  refImages?: string[];
   onSwitchToImages: () => void;
 }
 
-export default function VideoGenerator({ scenes, generatedImages, onSwitchToImages }: Props) {
+export default function VideoGenerator({ scenes, generatedImages, refImages, onSwitchToImages }: Props) {
   const [provider, setProvider] = useState<Provider>('runway-aleph');
   const [duration, setDuration] = useState<number>(5);
   const [videos, setVideos] = useState<Record<number, VideoState>>({});
@@ -242,8 +245,10 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     });
   }, []);
 
+  const hasRefImages = !!(refImages?.length);
+
   const generateOne = useCallback(async (scene: SceneAnalysis) => {
-    const imageSource = generatedImages[scene.scene];
+    const imageSource = (refImages?.length ? refImages[0] : null) ?? generatedImages[scene.scene];
     if (!imageSource) return;
 
     const rawPrompt = buildPrompt(scene);
@@ -305,19 +310,19 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         error: err instanceof Error ? err.message : 'Generation failed',
       });
     }
-  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, klingAccessKey, klingSecretKey, klingFlag, generatedImages, setVideoState, forceAudio, platform, aspectRatio]);
+  }, [provider, duration, kieKey, falKey, geminiKey, videoReplicateKey, klingAccessKey, klingSecretKey, klingFlag, generatedImages, refImages, setVideoState, forceAudio, platform, aspectRatio]);
 
   const generateAll = useCallback(async () => {
     if (!hasAnyKey || generatingAll) return;
     setGeneratingAll(true);
     for (const scene of scenes) {
-      if (generatedImages[scene.scene]) await generateOne(scene);
+      if (hasRefImages || generatedImages[scene.scene]) await generateOne(scene);
     }
     setGeneratingAll(false);
-  }, [hasAnyKey, generatingAll, scenes, generatedImages, generateOne]);
+  }, [hasAnyKey, generatingAll, scenes, generatedImages, hasRefImages, generateOne]);
 
-  const scenesWithImages = scenes.filter((s) => generatedImages[s.scene]);
-  const scenesWithoutImages = scenes.filter((s) => !generatedImages[s.scene]);
+  const scenesWithImages = hasRefImages ? scenes : scenes.filter((s) => generatedImages[s.scene]);
+  const scenesWithoutImages = hasRefImages ? [] : scenes.filter((s) => !generatedImages[s.scene]);
   const doneCount = Object.values(videos).filter((v) => v.url).length;
   const platformLabel = platform ? (PLATFORMS.find((p) => p.id === platform)?.label ?? null) : null;
 
@@ -446,7 +451,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
       {/* ── Per-scene cards ── */}
       <div className="vidgen-scenes">
         {scenes.map((scene) => {
-          const imageUrl = generatedImages[scene.scene] ?? null;
+          const imageUrl = (refImages?.length ? refImages[0] : null) ?? generatedImages[scene.scene] ?? null;
           const vid = videos[scene.scene];
           const isLoading = vid?.loading ?? false;
           const mediaUrl = vid?.url ?? null;
@@ -513,7 +518,12 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
               <div className="vidgen-body">
                 <div className="vidgen-source">
                   {imageUrl ? (
-                    <img src={imageUrl} alt={`Scene ${scene.scene} reference`} className="vidgen-thumb" />
+                    <div className="vidgen-thumb-wrap">
+                      <img src={imageUrl} alt={`Scene ${scene.scene} reference`} className="vidgen-thumb" />
+                      {hasRefImages && (
+                        <span className="vidgen-thumb-badge">Reference</span>
+                      )}
+                    </div>
                   ) : (
                     <div className="vidgen-thumb-empty">
                       <span className="vidgen-thumb-icon">🖼</span>

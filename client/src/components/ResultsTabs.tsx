@@ -331,6 +331,7 @@ type TabId = (typeof MAIN_TABS)[number]['id'];
 export default function ResultsTabs({ result, selectedPlatforms, description, onUseRemixIdea }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('scenes');
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
+  const [refImages, setRefImages] = useState<string[]>([]);
 
   const handleImageGenerated = useCallback((sceneNum: number, url: string) => {
     setGeneratedImages((prev) => ({ ...prev, [sceneNum]: url }));
@@ -446,6 +447,8 @@ export default function ResultsTabs({ result, selectedPlatforms, description, on
         {activeTab === 'images' && (
           <ImageGenerator
             scenes={result.sceneAnalysis}
+            refImages={refImages}
+            onRefImagesChange={setRefImages}
             onImageGenerated={handleImageGenerated}
           />
         )}
@@ -454,6 +457,7 @@ export default function ResultsTabs({ result, selectedPlatforms, description, on
           <VideoGenerator
             scenes={result.sceneAnalysis}
             generatedImages={generatedImages}
+            refImages={refImages}
             onSwitchToImages={() => setActiveTab('images')}
           />
         )}
@@ -461,7 +465,7 @@ export default function ResultsTabs({ result, selectedPlatforms, description, on
         {activeTab === 'musicgen' && (
           <MusicGen
             scenes={result.sceneAnalysis}
-            description={description ?? ''}
+            coverArtPrompt={result.coverArtPrompt}
           />
         )}
 

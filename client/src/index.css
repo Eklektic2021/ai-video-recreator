@@ -2189,6 +2189,23 @@ body.light-mode {
   gap: 0.25rem;
   background: var(--bg-input);
 }
+.vidgen-thumb-wrap { position: relative; display: inline-block; }
+.vidgen-thumb-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  color: var(--cyan);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .vidgen-thumb-icon { font-size: 1.4rem; opacity: 0.4; }
 .vidgen-thumb-label { font-size: 0.7rem; color: var(--text-3); text-align: center; }
 .vidgen-thumb-link {
@@ -2716,6 +2733,53 @@ body.light-mode {
   color: var(--cyan);
   min-width: 2.5rem;
   text-align: right;
+}
+.musicgen-coverart-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+.musicgen-coverart-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.musicgen-coverart-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.9rem;
+  border-radius: 4px;
+  border: 1px solid var(--cyan);
+  background: rgba(0,217,255,0.1);
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.musicgen-coverart-btn:hover:not(:disabled) { background: rgba(0,217,255,0.2); }
+.musicgen-coverart-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.musicgen-coverart-nokey { font-size: 0.73rem; color: var(--text-3); }
+.musicgen-coverart-prompt {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.5;
+  font-style: italic;
+}
+.musicgen-coverart-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.musicgen-coverart-img {
+  width: 100%;
+  max-width: 400px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
 }
 .light-mode .musicgen-title { color: #1a1a2e; }
 .light-mode .musicgen-subtitle { color: #555; }

@@ -43,18 +43,12 @@ async function pollUntilDone(
   throw new Error('Request timed out after polling');
 }
 
-// Character Lock — prepended to every video prompt
+// Character Lock — the input image is the character source; we only add motion requirements
 function wrapPrompt(raw: string): string {
   return (
-    '⚠ ABSOLUTE IDENTITY LOCK — NON-NEGOTIABLE: Every frame MUST feature the EXACT same person shown in the reference image — the identical individual, not a look-alike or substitute.\n' +
-    'SAME FACE: Reproduce the exact facial structure — identical bone structure, eye shape + color, nose shape + bridge, lip shape + fullness, skin tone, cheekbones, jawline, brow thickness + arch. Any facial variation is prohibited.\n' +
-    'SAME HAIR: Exact hair color, length, style, texture, parting, and accessories — zero changes allowed.\n' +
-    'SAME BODY: Identical build, height proportions, skin tone throughout every frame. Same clothing, jewelry, and accessories as the reference.\n' +
-    'SAME PERSON — NO SUBSTITUTION: Do not cast, render, or infer a different person. This is the only character permitted in this scene.\n' +
-    'MOTION REQUIRED: The character must move naturally and fluidly — no frozen frames, no static poses, no slideshow transitions.\n' +
-    'FRAME CONSISTENCY: Character appearance must be 100% identical across all frames — zero drift, morphing, or gradual change between frames.\n\n' +
-    `${raw}\n\n` +
-    'ABSOLUTE NEGATIVES: different person, wrong face, face substitution, wrong skin tone, wrong hair color, wrong hair style, face drift, character morph, extra characters, missing characters, static image, frozen frame, no motion, slideshow, watermark, blurry faces.'
+    raw +
+    '\n\nMaintain the exact character from the input image in every frame. ' +
+    'Smooth natural motion throughout. No frozen frames, no static poses, no watermark.'
   );
 }
 
@@ -468,7 +462,7 @@ app.post('/api/kling-audio', async (req, res) => {
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/kling/v3/image-to-video',
       kieHdr,
-      { prompt: p, imageUrl: imageBase64, duration: String(duration), aspectRatio, motion_has_audio: true },
+      { prompt: p, imageUrl: imageBase64, duration: String(duration), aspectRatio, motion_has_audio: true, sound: 'on' },
       'Kling3'
     );
     return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/kling/query/${taskId}`, kieHdr, 'Kling3'));
@@ -979,20 +973,25 @@ app.post('/api/suno', async (req, res) => {
   const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
 
   try {
+    const reqBody = { customMode: false, prompt, model, ...(title ? { title: title.slice(0, 80) } : {}), instrumental };
+    console.log(`[Suno] → POST create | model=${model} instrumental=${instrumental} prompt.length=${prompt.length}`);
     const createRes = await fetch('https://api.kie.ai/api/v1/suno/v4/create', {
       method: 'POST',
       headers: kieHdr,
-      body: JSON.stringify({ prompt, model, title: title.slice(0, 80), instrumental }),
+      body: JSON.stringify(reqBody),
     });
     const createRaw = await createRes.text();
-    console.log(`[Suno] create status=${createRes.status} body=${createRaw.slice(0, 300)}`);
+    console.log(`[Suno] ← status=${createRes.status} body=${createRaw.slice(0, 600)}`);
 
     let cp: { code?: number; message?: string; data?: { workId?: string } };
     try { cp = JSON.parse(createRaw); }
     catch { throw new Error(`Suno error ${createRes.status}: ${createRaw.slice(0, 200)}`); }
 
     if (!createRes.ok || (cp.code !== undefined && cp.code !== 200 && cp.code !== 0)) {
-      throw new Error(cp.message ?? `Suno error ${createRes.status}`);
+      const errMsg = cp.message && cp.message !== 'No Message Available'
+        ? cp.message
+        : `Suno API error (code ${cp.code ?? createRes.status}). Full response: ${createRaw.slice(0, 300)}`;
+      throw new Error(errMsg);
     }
 
     const workId = cp.data?.workId;

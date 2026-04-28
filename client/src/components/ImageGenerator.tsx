@@ -55,12 +55,13 @@ async function downloadImage(url: string, sceneNum: number) {
 
 interface Props {
   scenes: SceneAnalysis[];
+  refImages: string[];
+  onRefImagesChange: (images: string[]) => void;
   onImageGenerated?: (sceneNum: number, url: string) => void;
 }
 
-export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
+export default function ImageGenerator({ scenes, refImages, onRefImagesChange, onImageGenerated }: Props) {
   const [provider, setProvider] = useState<Provider>('dalle');
-  const [refImages, setRefImages] = useState<string[]>([]);
   const [images, setImages] = useState<Record<number, ImageState>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,12 +77,12 @@ export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
     if (remaining <= 0) return;
     const toAdd = Array.from(files).slice(0, remaining);
     const encoded = await Promise.all(toAdd.map(fileToBase64));
-    setRefImages((prev) => [...prev, ...encoded].slice(0, MAX_REFS));
-  }, [refImages.length]);
+    onRefImagesChange([...refImages, ...encoded].slice(0, MAX_REFS));
+  }, [refImages, onRefImagesChange]);
 
   const removeRef = useCallback((idx: number) => {
-    setRefImages((prev) => prev.filter((_, i) => i !== idx));
-  }, []);
+    onRefImagesChange(refImages.filter((_, i) => i !== idx));
+  }, [refImages, onRefImagesChange]);
 
   const setImageState = useCallback((sceneNum: number, update: Partial<ImageState>) => {
     setImages((prev) => {
@@ -96,10 +97,7 @@ export default function ImageGenerator({ scenes, onImageGenerated }: Props) {
       if (!key) return;
       setImageState(scene.scene, { loading: true, error: null, url: null });
       try {
-        const rawPrompt = buildPrompt(scene);
-        const prompt = refImages.length > 0
-          ? `STRICT IDENTITY LOCK: All character faces must exactly match the reference image — same facial structure, eyes, nose, lips, skin tone, hair color, hair style. Do not alter any facial feature. Then render this scene: ${rawPrompt}`
-          : rawPrompt;
+        const prompt = buildPrompt(scene);
         const url =
           provider === 'dalle'
             ? await generateWithDalle(key, prompt, refImages)

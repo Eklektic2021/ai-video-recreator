@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { SceneAnalysis } from '../types';
 import { getStoredKieKey } from '../lib/videoGen';
+import { getStoredOpenAIKey, generateWithDalle } from '../lib/imageGen';
 
 type MusicProvider = 'suno' | 'udio';
 type SunoModel = 'V4' | 'V4.5Plus';
@@ -79,9 +80,10 @@ function buildPrompt(
 interface Props {
   scenes: SceneAnalysis[];
   description?: string;
+  coverArtPrompt?: string;
 }
 
-export default function MusicGen({ scenes }: Props) {
+export default function MusicGen({ scenes, coverArtPrompt }: Props) {
   const [musicProvider, setMusicProvider] = useState<MusicProvider>('suno');
   const [sunoModel, setSunoModel] = useState<SunoModel>('V4');
   const [genre, setGenre] = useState<string>('Cinematic');
@@ -95,6 +97,25 @@ export default function MusicGen({ scenes }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const kieKey = getStoredKieKey();
+  const openaiKey = getStoredOpenAIKey();
+
+  const [coverArtUrl, setCoverArtUrl] = useState<string | null>(null);
+  const [coverArtLoading, setCoverArtLoading] = useState(false);
+  const [coverArtError, setCoverArtError] = useState<string | null>(null);
+
+  const generateCoverArt = useCallback(async () => {
+    if (!coverArtPrompt || !openaiKey) return;
+    setCoverArtLoading(true);
+    setCoverArtError(null);
+    try {
+      const url = await generateWithDalle(openaiKey, coverArtPrompt, []);
+      setCoverArtUrl(url);
+    } catch (err) {
+      setCoverArtError(err instanceof Error ? err.message : 'Cover art generation failed');
+    } finally {
+      setCoverArtLoading(false);
+    }
+  }, [coverArtPrompt, openaiKey]);
 
   const refreshPrompt = useCallback((
     provider: MusicProvider,
@@ -320,6 +341,52 @@ export default function MusicGen({ scenes }: Props) {
         <div className="musicgen-player">
           <audio src={audioUrl} controls className="musicgen-audio" />
           <button className="vidgen-download-btn" onClick={downloadAudio}>↓ Download MP3</button>
+        </div>
+      )}
+
+      {/* ── Cover Art ── */}
+      {coverArtPrompt && (
+        <div className="musicgen-coverart-section">
+          <div className="musicgen-coverart-header">
+            <span className="musicgen-row-label">Cover Art</span>
+            {openaiKey ? (
+              <button
+                className="musicgen-coverart-btn"
+                onClick={generateCoverArt}
+                disabled={coverArtLoading}
+              >
+                {coverArtLoading ? (
+                  <><span className="vidgen-btn-spinner" /> Generating…</>
+                ) : coverArtUrl ? (
+                  '↺ Regenerate'
+                ) : (
+                  '✦ Generate Cover Art'
+                )}
+              </button>
+            ) : (
+              <span className="musicgen-coverart-nokey">Add OpenAI key to generate</span>
+            )}
+          </div>
+          <p className="musicgen-coverart-prompt">{coverArtPrompt}</p>
+          {coverArtError && (
+            <div className="vidgen-error" style={{ marginTop: '0.5rem' }}>
+              <span>⚠ {coverArtError}</span>
+            </div>
+          )}
+          {coverArtUrl && !coverArtLoading && (
+            <div className="musicgen-coverart-result">
+              <img src={coverArtUrl} alt="Generated cover art" className="musicgen-coverart-img" />
+              <a
+                href={coverArtUrl}
+                download="cover-art.png"
+                className="vidgen-download-btn"
+                target="_blank"
+                rel="noreferrer"
+              >
+                ↓ Download
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>
