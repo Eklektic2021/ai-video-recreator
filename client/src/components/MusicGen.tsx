@@ -40,49 +40,55 @@ function buildPrompt(
   bpm: number,
   instrumental: boolean,
   scenes: SceneAnalysis[],
-  description: string,
 ): string {
   const moods = [...new Set(scenes.map((s) => s.mood).filter(Boolean))].slice(0, 3);
   const moodText = moods.length ? moods.join(', ') : 'cinematic, emotional';
   const instruments = GENRE_INSTRUMENTS[genre] ?? 'piano, bass, drums';
-  const descSnippet = description.trim().slice(0, 80);
-  const vocalNote = instrumental ? 'Instrumental only, no vocals.' : 'Background vocals or none.';
 
   if (provider === 'suno') {
-    return [
-      `[${genre}]`,
-      `[${bpm} BPM]`,
-      `[${moodText}]`,
-      descSnippet ? descSnippet + '.' : '',
-      `Instruments: ${instruments}.`,
-      `Beat style: ${genre.toLowerCase()} groove.`,
-      vocalNote,
-    ].filter(Boolean).join(' ');
+    if (instrumental) {
+      return [
+        `[${genre}] [${bpm} BPM] [${moodText}]`,
+        `Instruments: ${instruments}.`,
+        `Beat style: ${genre.toLowerCase()} groove.`,
+        'Instrumental only, no vocals.',
+      ].join('\n');
+    } else {
+      return [
+        `[${genre}] [${bpm} BPM] [${moodText}]`,
+        `Instruments: ${instruments}.`,
+        `Beat style: ${genre.toLowerCase()} groove.`,
+        '',
+        '[Verse]',
+        '',
+        '[Chorus]',
+      ].join('\n');
+    }
   } else {
+    const vocalNote = instrumental ? 'Instrumental only, no vocals.' : 'Background vocals or none.';
     return [
       `${genre} background music at ${bpm} BPM.`,
       `Mood and energy: ${moodText}.`,
-      descSnippet ? `Scene: ${descSnippet}.` : '',
       `Instruments: ${instruments}.`,
       `Beat style: ${genre.toLowerCase()} groove.`,
       vocalNote,
-    ].filter(Boolean).join(' ');
+    ].join(' ');
   }
 }
 
 interface Props {
   scenes: SceneAnalysis[];
-  description: string;
+  description?: string;
 }
 
-export default function MusicGen({ scenes, description }: Props) {
+export default function MusicGen({ scenes }: Props) {
   const [musicProvider, setMusicProvider] = useState<MusicProvider>('suno');
   const [sunoModel, setSunoModel] = useState<SunoModel>('V4');
   const [genre, setGenre] = useState<string>('Cinematic');
   const [bpm, setBpm] = useState<number>(() => autoBpm(scenes));
   const [instrumental, setInstrumental] = useState(false);
   const [prompt, setPrompt] = useState<string>(() =>
-    buildPrompt('suno', 'Cinematic', autoBpm(scenes), false, scenes, description)
+    buildPrompt('suno', 'Cinematic', autoBpm(scenes), false, scenes)
   );
   const [loading, setLoading] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -96,8 +102,8 @@ export default function MusicGen({ scenes, description }: Props) {
     b: number,
     instr: boolean,
   ) => {
-    setPrompt(buildPrompt(provider, g, b, instr, scenes, description));
-  }, [scenes, description]);
+    setPrompt(buildPrompt(provider, g, b, instr, scenes));
+  }, [scenes]);
 
   const handleProviderChange = (p: MusicProvider) => {
     setMusicProvider(p);
