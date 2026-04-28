@@ -41,6 +41,13 @@ export interface SFXItem {
   notes: string;
 }
 
+export interface RemixIdea {
+  title: string;
+  concept: string;
+  style: string;
+  mood: string;
+}
+
 export interface AnalysisResult {
   sceneAnalysis: SceneAnalysis[];
   videoPlatformPrompts: Record<string, VideoPlatformPrompt>;
@@ -48,6 +55,7 @@ export interface AnalysisResult {
   editingInstructions: Record<string, EditingInstructions>;
   sfxBreakdown: SFXItem[];
   coverArtPrompt: string;
+  remixIdeas?: RemixIdea[];
 }
 
 export interface SelectedPlatforms {

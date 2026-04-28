@@ -79,10 +79,18 @@ Always respond with a single valid JSON object matching this exact structure (no
       "notes": "..."
     }
   ],
-  "coverArtPrompt": "..."
+  "coverArtPrompt": "...",
+  "remixIdeas": [
+    {
+      "title": "...",
+      "concept": "...",
+      "style": "...",
+      "mood": "..."
+    }
+  ]
 }
 
-Generate scene analysis with 3-8 scenes depending on content length. Include only the platforms specified by the user. Make all prompts detailed, platform-specific, and immediately usable.`;
+Generate scene analysis with 3-8 scenes depending on content length. Include only the platforms specified by the user. Make all prompts detailed, platform-specific, and immediately usable. Always include exactly 5 remixIdeas — creative variations of the original content with different scenes, styles, visual concepts, or moods that could inspire a fresh recreation.`;
 
 export async function runAnalysis(
   apiKey: string,

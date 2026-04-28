@@ -1,11 +1,10 @@
-import crypto from 'crypto';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
@@ -23,16 +22,21 @@ async function pollUntilDone(
     }
     if (result.status === 'failed') throw new Error(result.error ?? 'Generation failed');
   }
-  throw new Error('Request timed out');
+  throw new Error('Request timed out after polling');
 }
 
+// Character Lock — prepended to every video prompt
 function wrapPrompt(raw: string): string {
   return (
-    'Cinematic video clip. Consistent characters throughout — do not change facial features, ' +
-    'skin tone, body proportions, or clothing between frames. No morphing, distortion, or ' +
-    'character drift. Smooth natural motion only — no static frames, no frozen imagery, no ' +
-    'slideshow effect. Keep all characters exactly as shown in the reference image.' +
-    `\n\n${raw}\n\n` +
+    'STRICT CHARACTER LOCK — Do NOT alter any of the following from the reference image:\n' +
+    '- Hairstyle, hair color, hair texture, and all hair accessories\n' +
+    '- All facial features including eye shape, nose, lips, skin tone, and facial structure\n' +
+    '- All outfit details, jewelry, accessories, and styling\n' +
+    '- Do NOT add, remove, or change any characters\n' +
+    '- Maintain exact same appearance across ALL frames with NO drift, morphing, or inconsistency\n' +
+    '- No static movement — all motion must be fluid, natural, and cinematic\n' +
+    '- No frozen frames or slideshow effects\n\n' +
+    `${raw}\n\n` +
     'Negative: static image, frozen frame, slideshow, morphing faces, distorted features, ' +
     'extra limbs, extra characters, character inconsistency, blurry faces, low quality, watermark.'
   );
@@ -42,10 +46,8 @@ const SAFETY_KEYWORDS = [
   'content policy', 'safety', 'flagged', 'violat', 'moderat',
   'inappropriate', 'nsfw', 'harmful', 'blocked', 'prohibited',
 ];
-
 function isSafetyError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return SAFETY_KEYWORDS.some((kw) => lower.includes(kw));
+  return SAFETY_KEYWORDS.some((kw) => message.toLowerCase().includes(kw));
 }
 
 const SANITIZE_MAP: [RegExp, string][] = [
@@ -62,20 +64,16 @@ const SANITIZE_MAP: [RegExp, string][] = [
   [/\bterror(?:ist)?\b/gi, 'figure'],
   [/\bstab(?:bing|bed|s)?\b/gi, 'strike'],
 ];
-
 export function sanitizePrompt(prompt: string): string {
   let result = prompt;
-  for (const [pattern, replacement] of SANITIZE_MAP) {
-    result = result.replace(pattern, replacement);
-  }
+  for (const [pattern, replacement] of SANITIZE_MAP) result = result.replace(pattern, replacement);
   return result;
 }
-
 function safetyMessage(provider: string): string {
   return `This scene's prompt was flagged by ${provider}'s safety system. Please edit the scene description and try again.`;
 }
 
-// ── KIE AI shared helpers ──────────────────────────────────────────────────────
+// ── KIE shared helpers ─────────────────────────────────────────────────────────
 
 type KieCreateBody = Record<string, unknown>;
 
@@ -90,12 +88,7 @@ interface KieCreateResponse {
 interface KiePollResponse {
   code?: number;
   message?: string;
-  data?: {
-    status?: string;
-    videoUrl?: string;
-    video_url?: string;
-    failReason?: string;
-  };
+  data?: { status?: string; videoUrl?: string; video_url?: string; failReason?: string };
 }
 
 async function kieCreate(
@@ -104,29 +97,26 @@ async function kieCreate(
   body: KieCreateBody,
   label: string
 ): Promise<string> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   const raw = await res.text();
-  console.log(`[${label}] create status=${res.status} body=${raw}`);
+  console.log(`[${label}] create status=${res.status} body=${raw.slice(0, 500)}`);
 
   let parsed: KieCreateResponse;
   try { parsed = JSON.parse(raw); }
-  catch { throw new Error(`${label} error ${res.status}: ${raw}`); }
+  catch { throw new Error(`${label} error ${res.status}: ${raw.slice(0, 200)}`); }
 
   if (!res.ok || (parsed.code !== undefined && parsed.code !== 200 && parsed.code !== 0)) {
-    throw new Error(parsed.message ?? `${label} error ${res.status}`);
+    const msg = parsed.message ?? parsed.data?.failReason as string ?? `${label} error ${res.status}`;
+    throw new Error(msg);
   }
 
   const taskId =
     parsed.data?.taskId ?? parsed.data?.task_id ?? parsed.data?.id ??
     parsed.taskId ?? parsed.task_id;
-  if (!taskId) throw new Error(`${label} did not return a task ID. Response: ${raw}`);
+  if (!taskId) throw new Error(`${label} did not return a task ID. Response: ${raw.slice(0, 200)}`);
 
   console.log(`[${label}] taskId=${taskId}`);
-  return taskId;
+  return String(taskId);
 }
 
 function kiePoll(
@@ -136,15 +126,16 @@ function kiePoll(
 ): () => Promise<{ status: string; url?: string; error?: string }> {
   return async () => {
     const r = await fetch(queryUrl, { headers });
-    const body = await r.json() as KiePollResponse;
+    const raw = await r.text();
+    let body: KiePollResponse;
+    try { body = JSON.parse(raw); } catch { return { status: 'pending' }; }
+
     const data = body.data ?? {};
     const st = (data.status ?? '').toLowerCase();
     const url = data.videoUrl ?? data.video_url;
     console.log(`[${label}] poll status=${st} url=${url ?? '(none)'}`);
 
-    if (st === 'succeeded' || st === 'completed' || st === 'success') {
-      return { status: 'done', url };
-    }
+    if (st === 'succeeded' || st === 'completed' || st === 'success') return { status: 'done', url };
     if (st === 'failed' || st === 'error') {
       return { status: 'failed', error: data.failReason ?? body.message ?? `${label} task failed` };
     }
@@ -152,23 +143,67 @@ function kiePoll(
   };
 }
 
-// ── Replicate proxy ──────────────────────────────────────────────────────────
+// ── fal.ai shared helpers ──────────────────────────────────────────────────────
+
+async function falSubmit(
+  endpoint: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  label: string
+): Promise<string> {
+  const res = await fetch(`https://queue.fal.run/${endpoint}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  const raw = await res.text();
+  console.log(`[${label}/fal] submit status=${res.status} body=${raw.slice(0, 300)}`);
+
+  let parsed: { request_id?: string; error?: string; detail?: string };
+  try { parsed = JSON.parse(raw); }
+  catch { throw new Error(`${label} fal.ai error ${res.status}: ${raw.slice(0, 200)}`); }
+
+  if (!res.ok) throw new Error(parsed.detail ?? parsed.error ?? `${label} fal.ai error ${res.status}`);
+  const reqId = parsed.request_id;
+  if (!reqId) throw new Error(`${label} fal.ai did not return request_id`);
+
+  console.log(`[${label}/fal] request_id=${reqId}`);
+  return reqId;
+}
+
+function falPoll<T>(
+  endpoint: string,
+  requestId: string,
+  headers: Record<string, string>,
+  label: string,
+  extractUrl: (data: T) => string | undefined
+): () => Promise<{ status: string; url?: string; error?: string }> {
+  return async () => {
+    const sr = await fetch(`https://queue.fal.run/${endpoint}/requests/${requestId}/status`, { headers });
+    const s = await sr.json() as { status: string; error?: string };
+    console.log(`[${label}/fal] poll status=${s.status}`);
+
+    if (s.status === 'COMPLETED') {
+      const rr = await fetch(`https://queue.fal.run/${endpoint}/requests/${requestId}`, { headers });
+      const data = await rr.json() as T;
+      return { status: 'done', url: extractUrl(data) };
+    }
+    if (s.status === 'FAILED' || s.status === 'ERROR') {
+      return { status: 'failed', error: s.error ?? `${label} failed` };
+    }
+    return { status: 'pending' };
+  };
+}
+
+// ── /api/replicate — image gen proxy (used by imageGen.ts) ───────────────────
 app.post('/api/replicate', async (req, res) => {
   const apiKey = req.headers['x-replicate-key'];
   if (!apiKey || typeof apiKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-replicate-key header' });
-    return;
+    res.status(400).json({ error: 'Missing x-replicate-key header' }); return;
   }
 
-  const { prompt, referenceImageBase64 } = req.body as {
-    prompt?: string;
-    referenceImageBase64?: string;
-  };
-
-  if (!prompt) {
-    res.status(400).json({ error: 'Missing prompt in request body' });
-    return;
-  }
+  const { prompt, referenceImageBase64 } = req.body as { prompt?: string; referenceImageBase64?: string };
+  if (!prompt) { res.status(400).json({ error: 'Missing prompt' }); return; }
 
   const useRedux = !!referenceImageBase64;
   const modelUrl = useRedux
@@ -184,254 +219,498 @@ app.post('/api/replicate', async (req, res) => {
     });
     if (!createRes.ok) {
       const err = await createRes.json().catch(() => ({})) as { detail?: string };
-      res.status(createRes.status).json({ error: err.detail ?? `Replicate error ${createRes.status}` });
-      return;
+      res.status(createRes.status).json({ error: err.detail ?? `Replicate error ${createRes.status}` }); return;
     }
 
-    const prediction = await createRes.json() as {
-      id: string; status: string; output?: string[] | string; error?: string;
-    };
-    const extractUrl = (o: string[] | string | undefined) =>
-      Array.isArray(o) ? o[0] : o ?? null;
+    const prediction = await createRes.json() as { id: string; status: string; output?: string[] | string; error?: string };
+    const extractUrl = (o: string[] | string | undefined) => Array.isArray(o) ? o[0] : o ?? null;
 
     if (prediction.status === 'succeeded' && extractUrl(prediction.output)) {
-      res.json({ url: extractUrl(prediction.output) });
-      return;
+      res.json({ url: extractUrl(prediction.output) }); return;
     }
 
     const predId = prediction.id;
-    try {
-      const url = await pollUntilDone(async () => {
-        const r = await fetch(`https://api.replicate.com/v1/predictions/${predId}`, {
-          headers: { Authorization: `Token ${apiKey}` },
-        });
-        const p = await r.json() as { status: string; output?: string[] | string; error?: string };
-        if (p.status === 'succeeded') return { status: 'done', url: extractUrl(p.output) ?? undefined };
-        if (p.status === 'failed' || p.status === 'canceled') return { status: 'failed', error: p.error };
-        return { status: 'pending' };
-      }, 90, 2000);
-      res.json({ url });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
-    }
+    const url = await pollUntilDone(async () => {
+      const r = await fetch(`https://api.replicate.com/v1/predictions/${predId}`, {
+        headers: { Authorization: `Token ${apiKey}` },
+      });
+      const p = await r.json() as { status: string; output?: string[] | string; error?: string };
+      if (p.status === 'succeeded') return { status: 'done', url: extractUrl(p.output) ?? undefined };
+      if (p.status === 'failed' || p.status === 'canceled') return { status: 'failed', error: p.error };
+      return { status: 'pending' };
+    }, 90, 2000);
+    res.json({ url });
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
+    res.status(500).json({ error: (err as Error).message });
   }
 });
 
-// ── KIE Runway proxy ──────────────────────────────────────────────────────────
+// ── /api/runway — Runway Aleph via KIE ───────────────────────────────────────
 app.post('/api/runway', async (req, res) => {
   const kieKey = req.headers['x-kie-key'];
   if (!kieKey || typeof kieKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kie-key header' });
-    return;
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, imageBase64, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  async function attemptRunway(p: string): Promise<string> {
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/runway/generate',
+      kieHdr,
+      { prompt: p, imageUrl: imageBase64, model: 'runway-aleph', aspectRatio, waterMark: false },
+      'Runway'
+    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/runway/query/${taskId}`, kieHdr, 'Runway'));
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptRunway(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptRunway(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Runway') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/kling — Kling 2.1 via KIE ──────────────────────────────────────────
+app.post('/api/kling', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
   }
 
   const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
     prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
   };
-  if (!prompt || !imageBase64) {
-    res.status(400).json({ error: 'Missing prompt or imageBase64' });
-    return;
-  }
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
-  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
-  const model = duration === 10 ? 'runway-duration-10-generate' : 'runway-duration-5-generate';
-
-  async function attemptRunway(p: string): Promise<string> {
-    const taskId = await kieCreate(
-      'https://api.kie.ai/api/v1/runway/generate',
-      kieHeaders,
-      { prompt: p, imageUrl: imageBase64, model, aspectRatio, waterMark: 'MAISuite Flow' },
-      'Runway'
-    );
-    return pollUntilDone(
-      kiePoll(`https://api.kie.ai/api/v1/runway/query/${taskId}`, kieHeaders, 'Runway')
-    );
-  }
-
-  try {
-    let url: string;
-    try {
-      url = await attemptRunway(wrapPrompt(prompt));
-    } catch (firstErr) {
-      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try { url = await attemptRunway(wrapPrompt(sanitizePrompt(prompt))); }
-        catch { res.status(400).json({ error: safetyMessage('Runway') }); return; }
-      } else { throw firstErr; }
-    }
-    res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
-  }
-});
-
-// ── KIE Kling proxy ───────────────────────────────────────────────────────────
-app.post('/api/kling', async (req, res) => {
-  const kieKey = req.headers['x-kie-key'];
-  if (!kieKey || typeof kieKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kie-key header' });
-    return;
-  }
-
-  const { prompt, imageBase64, duration = 5, audioEnabled = false, aspectRatio = '16:9' } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number; audioEnabled?: boolean; aspectRatio?: string;
-  };
-  if (!prompt || !imageBase64) {
-    res.status(400).json({ error: 'Missing prompt or imageBase64' });
-    return;
-  }
-
-  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
-  console.log(`[Kling/KIE] duration=${duration} audio=${audioEnabled} ratio=${aspectRatio}`);
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
 
   async function attemptKling(p: string): Promise<string> {
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/kling/v2.1/image-to-video',
-      kieHeaders,
-      {
-        prompt: p,
-        imageUrl: imageBase64,
-        duration: String(duration),
-        aspectRatio,
-        modelName: 'kling-v2.1',
-      },
+      kieHdr,
+      { prompt: p, imageUrl: imageBase64, duration: String(duration), aspectRatio, modelName: 'kling-v2.1' },
       'Kling'
     );
-    return pollUntilDone(
-      kiePoll(`https://api.kie.ai/api/v1/kling/query/${taskId}`, kieHeaders, 'Kling')
-    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/kling/query/${taskId}`, kieHdr, 'Kling'));
   }
 
   try {
     let url: string;
-    try {
-      url = await attemptKling(wrapPrompt(prompt));
-    } catch (firstErr) {
-      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+    try { url = await attemptKling(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
         try { url = await attemptKling(wrapPrompt(sanitizePrompt(prompt))); }
         catch { res.status(400).json({ error: safetyMessage('Kling') }); return; }
-      } else { throw firstErr; }
+      } else { throw e; }
     }
     res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
-  }
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-// ── KIE Vidu proxy ────────────────────────────────────────────────────────────
+// ── /api/kling-audio — Kling 3.0 with audio via KIE ─────────────────────────
+app.post('/api/kling-audio', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  async function attemptKling3(p: string): Promise<string> {
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/kling/v3/image-to-video',
+      kieHdr,
+      { prompt: p, imageUrl: imageBase64, duration: String(duration), aspectRatio, motion_has_audio: true },
+      'Kling3'
+    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/kling/query/${taskId}`, kieHdr, 'Kling3'));
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptKling3(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptKling3(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Kling 3.0') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/veo-fast — Veo 3.1 Fast via KIE ────────────────────────────────────
+app.post('/api/veo-fast', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, imageBase64, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  async function attemptVeoFast(p: string): Promise<string> {
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/veo/generate',
+      kieHdr,
+      { prompt: p, imageUrls: [imageBase64], model: 'veo3_fast', aspect_ratio: aspectRatio, generationType: 'REFERENCE_2_VIDEO' },
+      'VeoFast'
+    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/veo/query/${taskId}`, kieHdr, 'VeoFast'));
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptVeoFast(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptVeoFast(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Veo 3.1 Fast') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/veo-full — Veo 3.1 Full with audio via KIE ─────────────────────────
+app.post('/api/veo-full', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, imageBase64, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  async function attemptVeoFull(p: string): Promise<string> {
+    const taskId = await kieCreate(
+      'https://api.kie.ai/api/v1/veo/generate',
+      kieHdr,
+      { prompt: p, imageUrls: [imageBase64], model: 'veo3', aspect_ratio: aspectRatio, generationType: 'REFERENCE_2_VIDEO', enableAudio: true },
+      'VeoFull'
+    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/veo/query/${taskId}`, kieHdr, 'VeoFull'));
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptVeoFull(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptVeoFull(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Veo 3.1') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/vidu — Vidu 2.0 via KIE (kept for compatibility) ───────────────────
 app.post('/api/vidu', async (req, res) => {
   const kieKey = req.headers['x-kie-key'];
   if (!kieKey || typeof kieKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kie-key header' });
-    return;
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
   }
 
   const { prompt, imageBase64, duration = 4, aspectRatio = '16:9' } = req.body as {
     prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
   };
-  if (!prompt || !imageBase64) {
-    res.status(400).json({ error: 'Missing prompt or imageBase64' });
-    return;
-  }
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
-  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
 
   async function attemptVidu(p: string): Promise<string> {
     const taskId = await kieCreate(
       'https://api.kie.ai/api/v1/vidu/generate',
-      kieHeaders,
+      kieHdr,
       { prompt: p, imageUrl: imageBase64, duration, aspectRatio },
       'Vidu'
     );
-    return pollUntilDone(
-      kiePoll(`https://api.kie.ai/api/v1/vidu/query/${taskId}`, kieHeaders, 'Vidu')
-    );
+    return pollUntilDone(kiePoll(`https://api.kie.ai/api/v1/vidu/query/${taskId}`, kieHdr, 'Vidu'));
   }
 
   try {
     let url: string;
-    try {
-      url = await attemptVidu(wrapPrompt(prompt));
-    } catch (firstErr) {
-      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
+    try { url = await attemptVidu(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
         try { url = await attemptVidu(wrapPrompt(sanitizePrompt(prompt))); }
         catch { res.status(400).json({ error: safetyMessage('Vidu') }); return; }
-      } else { throw firstErr; }
+      } else { throw e; }
     }
     res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
-  }
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-// ── KIE Veo proxy ─────────────────────────────────────────────────────────────
-app.post('/api/veo', async (req, res) => {
-  const kieKey = req.headers['x-kie-key'];
-  if (!kieKey || typeof kieKey !== 'string') {
-    res.status(400).json({ error: 'Missing x-kie-key header' });
-    return;
+// ── /api/fal-kling-audio — Kling 3.0 with audio via fal.ai ──────────────────
+app.post('/api/fal-kling-audio', async (req, res) => {
+  const falKey = req.headers['x-fal-key'];
+  if (!falKey || typeof falKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-fal-key header' }); return;
   }
 
-  const { prompt, imageBase64, enableAudio = false, aspectRatio = '16:9' } = req.body as {
-    prompt?: string; imageBase64?: string; duration?: number; enableAudio?: boolean; aspectRatio?: string;
+  const { prompt, imageBase64, duration = 5, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; duration?: number; aspectRatio?: string;
   };
-  if (!prompt || !imageBase64) {
-    res.status(400).json({ error: 'Missing prompt or imageBase64' });
-    return;
-  }
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
 
-  const kieHeaders = { 'Authorization': `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
-  const veoModel = enableAudio ? 'veo3' : 'veo3_fast';
+  const FAL_EP = 'fal-ai/kling-video/v3/image-to-video';
+  const falHdr = { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' };
 
-  async function attemptVeo(p: string): Promise<string> {
-    const body: KieCreateBody = {
-      prompt: p,
-      imageUrls: [imageBase64],
-      model: veoModel,
-      aspect_ratio: aspectRatio,
-      generationType: 'REFERENCE_2_VIDEO',
-    };
-    if (enableAudio) body.enableAudio = true;
-    const taskId = await kieCreate(
-      'https://api.kie.ai/api/v1/veo/generate',
-      kieHeaders,
-      body,
-      'Veo'
+  async function attemptFalKling(p: string): Promise<string> {
+    const reqId = await falSubmit(
+      FAL_EP,
+      falHdr,
+      { image_url: imageBase64, prompt: p, duration: String(duration), aspect_ratio: aspectRatio, motion_has_audio: true },
+      'Kling3/fal'
     );
     return pollUntilDone(
-      kiePoll(`https://api.kie.ai/api/v1/veo/query/${taskId}`, kieHeaders, 'Veo')
+      falPoll<{ video?: { url: string } }>(FAL_EP, reqId, falHdr, 'Kling3/fal', (d) => d.video?.url),
+      90, 5000
     );
   }
 
   try {
     let url: string;
-    try {
-      url = await attemptVeo(wrapPrompt(prompt));
-    } catch (firstErr) {
-      if (firstErr instanceof Error && isSafetyError(firstErr.message)) {
-        try { url = await attemptVeo(wrapPrompt(sanitizePrompt(prompt))); }
-        catch { res.status(400).json({ error: safetyMessage('Veo') }); return; }
-      } else { throw firstErr; }
+    try { url = await attemptFalKling(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptFalKling(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Kling 3.0') }); return; }
+      } else { throw e; }
     }
     res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Server error' });
-  }
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
 });
 
-// ── Serve React frontend ─────────────────────────────────────────────────────
+// ── /api/fal-flux — FLUX Dev via fal.ai ─────────────────────────────────────
+app.post('/api/fal-flux', async (req, res) => {
+  const falKey = req.headers['x-fal-key'];
+  if (!falKey || typeof falKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-fal-key header' }); return;
+  }
+
+  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  if (!prompt) { res.status(400).json({ error: 'Missing prompt' }); return; }
+
+  const FAL_EP = 'fal-ai/flux/dev';
+  const falHdr = { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' };
+
+  const submitBody: Record<string, unknown> = { prompt };
+  if (imageBase64) submitBody.image_url = imageBase64;
+
+  try {
+    const reqId = await falSubmit(FAL_EP, falHdr, submitBody, 'FLUX/fal');
+    const url = await pollUntilDone(
+      falPoll<{ images?: { url: string }[] }>(FAL_EP, reqId, falHdr, 'FLUX/fal', (d) => d.images?.[0]?.url),
+      60, 3000
+    );
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/replicate-flux — FLUX Dev via Replicate (video) ─────────────────────
+app.post('/api/replicate-flux', async (req, res) => {
+  const apiKey = req.headers['x-replicate-key'];
+  if (!apiKey || typeof apiKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-replicate-key header' }); return;
+  }
+
+  const { prompt, imageBase64 } = req.body as { prompt?: string; imageBase64?: string };
+  if (!prompt) { res.status(400).json({ error: 'Missing prompt' }); return; }
+
+  const MODEL_URL = 'https://api.replicate.com/v1/models/black-forest-labs/flux-dev/predictions';
+  const input: Record<string, unknown> = { prompt };
+  if (imageBase64) input.image = imageBase64;
+
+  try {
+    const createRes = await fetch(MODEL_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Token ${apiKey}` },
+      body: JSON.stringify({ input }),
+    });
+    if (!createRes.ok) {
+      const err = await createRes.json().catch(() => ({})) as { detail?: string };
+      res.status(createRes.status).json({ error: err.detail ?? `Replicate error ${createRes.status}` }); return;
+    }
+
+    const prediction = await createRes.json() as { id: string; status: string; output?: string[] | string; error?: string };
+    const extractUrl = (o: string[] | string | undefined) => Array.isArray(o) ? o[0] : o ?? undefined;
+
+    if (prediction.status === 'succeeded') {
+      res.json({ url: extractUrl(prediction.output) }); return;
+    }
+
+    const predId = prediction.id;
+    const url = await pollUntilDone(async () => {
+      const r = await fetch(`https://api.replicate.com/v1/predictions/${predId}`, {
+        headers: { Authorization: `Token ${apiKey}` },
+      });
+      const p = await r.json() as { status: string; output?: string[] | string; error?: string };
+      if (p.status === 'succeeded') return { status: 'done', url: extractUrl(p.output) };
+      if (p.status === 'failed' || p.status === 'canceled') return { status: 'failed', error: p.error };
+      return { status: 'pending' };
+    }, 60, 3000);
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/veo-gemini — Veo 3.1 direct via Gemini API ─────────────────────────
+app.post('/api/veo-gemini', async (req, res) => {
+  const geminiKey = req.headers['x-gemini-key'];
+  if (!geminiKey || typeof geminiKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-gemini-key header' }); return;
+  }
+
+  const { prompt, imageBase64, aspectRatio = '16:9' } = req.body as {
+    prompt?: string; imageBase64?: string; aspectRatio?: string;
+  };
+  if (!prompt || !imageBase64) { res.status(400).json({ error: 'Missing prompt or imageBase64' }); return; }
+
+  // Strip data URI prefix → raw base64
+  const rawBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+
+  async function attemptVeoDirect(p: string): Promise<string> {
+    const createRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          instances: [{ prompt: p, image: { bytesBase64Encoded: rawBase64 } }],
+          parameters: { aspectRatio, durationSeconds: 8 },
+        }),
+      }
+    );
+
+    const createRaw = await createRes.text();
+    console.log(`[VeoDirect] create status=${createRes.status} body=${createRaw.slice(0, 300)}`);
+
+    if (!createRes.ok) {
+      let msg: string;
+      try { msg = (JSON.parse(createRaw) as { error?: { message?: string } }).error?.message ?? `Gemini error ${createRes.status}`; }
+      catch { msg = `Gemini error ${createRes.status}: ${createRaw.slice(0, 100)}`; }
+      throw new Error(msg);
+    }
+
+    const op = JSON.parse(createRaw) as { name: string };
+    const opName = op.name;
+
+    return pollUntilDone(async () => {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/${opName}?key=${geminiKey}`);
+      const t = await r.json() as {
+        done?: boolean;
+        error?: { message?: string };
+        response?: { generateVideoResponse?: { generatedSamples?: { video?: { uri?: string } }[] } };
+      };
+      if (t.error) return { status: 'failed', error: t.error.message };
+      if (t.done) {
+        const uri = t.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
+        return { status: 'done', url: uri };
+      }
+      return { status: 'pending' };
+    }, 120, 5000);
+  }
+
+  try {
+    let url: string;
+    try { url = await attemptVeoDirect(wrapPrompt(prompt)); }
+    catch (e) {
+      if (e instanceof Error && isSafetyError(e.message)) {
+        try { url = await attemptVeoDirect(wrapPrompt(sanitizePrompt(prompt))); }
+        catch { res.status(400).json({ error: safetyMessage('Veo 3.1 Direct') }); return; }
+      } else { throw e; }
+    }
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── /api/suno — Suno music via KIE ───────────────────────────────────────────
+app.post('/api/suno', async (req, res) => {
+  const kieKey = req.headers['x-kie-key'];
+  if (!kieKey || typeof kieKey !== 'string') {
+    res.status(400).json({ error: 'Missing x-kie-key header' }); return;
+  }
+
+  const { prompt, model = 'V4', title = '', instrumental = false } = req.body as {
+    prompt?: string; model?: string; title?: string; instrumental?: boolean;
+  };
+  if (!prompt) { res.status(400).json({ error: 'Missing prompt' }); return; }
+
+  const kieHdr = { Authorization: `Bearer ${kieKey}`, 'Content-Type': 'application/json' };
+
+  try {
+    const createRes = await fetch('https://api.kie.ai/api/v1/suno/v4/create', {
+      method: 'POST',
+      headers: kieHdr,
+      body: JSON.stringify({ prompt, model, title: title.slice(0, 80), instrumental }),
+    });
+    const createRaw = await createRes.text();
+    console.log(`[Suno] create status=${createRes.status} body=${createRaw.slice(0, 300)}`);
+
+    let cp: { code?: number; message?: string; data?: { workId?: string } };
+    try { cp = JSON.parse(createRaw); }
+    catch { throw new Error(`Suno error ${createRes.status}: ${createRaw.slice(0, 200)}`); }
+
+    if (!createRes.ok || (cp.code !== undefined && cp.code !== 200 && cp.code !== 0)) {
+      throw new Error(cp.message ?? `Suno error ${createRes.status}`);
+    }
+
+    const workId = cp.data?.workId;
+    if (!workId) throw new Error('Suno did not return a workId');
+    console.log(`[Suno] workId=${workId}`);
+
+    const url = await pollUntilDone(async () => {
+      const r = await fetch(`https://api.kie.ai/api/v1/suno/record-info?workId=${workId}`, { headers: kieHdr });
+      const body = await r.json() as {
+        code?: number;
+        data?: { status?: string; tracks?: { audioUrl?: string }[]; audioUrl?: string };
+      };
+      const data = body.data ?? {};
+      const st = (data.status ?? '').toLowerCase();
+      console.log(`[Suno] poll status=${st}`);
+      if (st === 'completed' || st === 'success' || st === 'succeeded') {
+        return { status: 'done', url: data.tracks?.[0]?.audioUrl ?? data.audioUrl };
+      }
+      if (st === 'failed' || st === 'error') return { status: 'failed', error: 'Suno generation failed' };
+      return { status: 'pending' };
+    }, 60, 5000);
+
+    res.json({ url });
+  } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+});
+
+// ── Serve React frontend ──────────────────────────────────────────────────────
 const distPath = path.join(__dirname, '..', 'dist', 'public');
 app.use(express.static(distPath));
-
 app.get(/^(?!\/api).*/, (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
 const PORT = Number(process.env.PORT) || 3001;
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
-
-// suppress unused-import warning for crypto (used by old Kling JWT, kept for potential future use)
-void crypto;
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

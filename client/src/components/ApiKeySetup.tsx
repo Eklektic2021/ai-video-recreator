@@ -6,7 +6,12 @@ import {
   getStoredReplicateKey,
   saveReplicateKey,
 } from '../lib/imageGen';
-import { getStoredKieKey, saveKieKey } from '../lib/videoGen';
+import {
+  getStoredKieKey, saveKieKey,
+  getStoredFalKey, saveFalKey,
+  getStoredGeminiKey, saveGeminiKey,
+  getStoredVideoReplicateKey, saveVideoReplicateKey,
+} from '../lib/videoGen';
 
 interface Props {
   onSave: (key: string) => void;
@@ -26,6 +31,15 @@ export default function ApiKeySetup({ onSave }: Props) {
   const [kieKey, setKieKey] = useState(getStoredKieKey);
   const [showKie, setShowKie] = useState(false);
 
+  const [falKey, setFalKey] = useState(getStoredFalKey);
+  const [showFal, setShowFal] = useState(false);
+
+  const [videoReplicateKey, setVideoReplicateKey] = useState(getStoredVideoReplicateKey);
+  const [showVideoReplicate, setShowVideoReplicate] = useState(false);
+
+  const [geminiKey, setGeminiKey] = useState(getStoredGeminiKey);
+  const [showGemini, setShowGemini] = useState(false);
+
   const handleSave = () => {
     const trimmed = key.trim();
     if (!trimmed) {
@@ -40,6 +54,9 @@ export default function ApiKeySetup({ onSave }: Props) {
     if (openaiKey.trim()) saveOpenAIKey(openaiKey);
     if (replicateKey.trim()) saveReplicateKey(replicateKey);
     if (kieKey.trim()) saveKieKey(kieKey);
+    if (falKey.trim()) saveFalKey(falKey);
+    if (videoReplicateKey.trim()) saveVideoReplicateKey(videoReplicateKey);
+    if (geminiKey.trim()) saveGeminiKey(geminiKey);
     onSave(trimmed);
   };
 
@@ -143,7 +160,7 @@ export default function ApiKeySetup({ onSave }: Props) {
 
         {/* ── KIE AI (optional) ── */}
         <p className="apikey-field-label">
-          KIE AI API Key <span className="apikey-optional">for all video generation</span>
+          KIE AI API Key <span className="apikey-optional">for Runway, Kling, Veo & Suno</span>
         </p>
         <div className="apikey-input-wrap">
           <input
@@ -161,6 +178,75 @@ export default function ApiKeySetup({ onSave }: Props) {
         <p className="apikey-link-text">
           <a href="https://kie.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
             Get KIE AI key ↗
+          </a>
+        </p>
+
+        {/* ── fal.ai (optional) ── */}
+        <p className="apikey-field-label">
+          fal.ai API Key <span className="apikey-optional">for Kling 3.0 &amp; FLUX Dev</span>
+        </p>
+        <div className="apikey-input-wrap">
+          <input
+            className="apikey-input"
+            type={showFal ? 'text' : 'password'}
+            placeholder="fal_..."
+            value={falKey}
+            onChange={(e) => setFalKey(e.target.value)}
+            spellCheck={false}
+          />
+          <button className="apikey-toggle" type="button" onClick={() => setShowFal((s) => !s)} tabIndex={-1}>
+            {showFal ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <p className="apikey-link-text">
+          <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer" className="apikey-link">
+            Get fal.ai key ↗
+          </a>
+        </p>
+
+        {/* ── Replicate video (optional) ── */}
+        <p className="apikey-field-label">
+          Replicate API Key <span className="apikey-optional">for FLUX Dev (video)</span>
+        </p>
+        <div className="apikey-input-wrap">
+          <input
+            className="apikey-input"
+            type={showVideoReplicate ? 'text' : 'password'}
+            placeholder="r8_..."
+            value={videoReplicateKey}
+            onChange={(e) => setVideoReplicateKey(e.target.value)}
+            spellCheck={false}
+          />
+          <button className="apikey-toggle" type="button" onClick={() => setShowVideoReplicate((s) => !s)} tabIndex={-1}>
+            {showVideoReplicate ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <p className="apikey-link-text">
+          <a href="https://replicate.com/account/api-tokens" target="_blank" rel="noreferrer" className="apikey-link">
+            Get Replicate key ↗
+          </a>
+        </p>
+
+        {/* ── Google Gemini (optional) ── */}
+        <p className="apikey-field-label">
+          Google Gemini API Key <span className="apikey-optional">for Veo 3.1 direct</span>
+        </p>
+        <div className="apikey-input-wrap">
+          <input
+            className="apikey-input"
+            type={showGemini ? 'text' : 'password'}
+            placeholder="AIza..."
+            value={geminiKey}
+            onChange={(e) => setGeminiKey(e.target.value)}
+            spellCheck={false}
+          />
+          <button className="apikey-toggle" type="button" onClick={() => setShowGemini((s) => !s)} tabIndex={-1}>
+            {showGemini ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <p className="apikey-link-text">
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="apikey-link">
+            Get Gemini key ↗
           </a>
         </p>
 

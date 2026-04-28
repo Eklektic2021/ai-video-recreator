@@ -6,13 +6,17 @@ import {
   MusicPrompt,
   EditingInstructions,
   SFXItem,
+  RemixIdea,
 } from '../types';
 import ImageGenerator from './ImageGenerator';
 import VideoGenerator from './VideoGenerator';
+import MusicGen from './MusicGen';
 
 interface Props {
   result: AnalysisResult;
   selectedPlatforms: { video: string[]; music: string[]; editing: string[] };
+  description?: string;
+  onUseRemixIdea?: (concept: string) => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -270,10 +274,51 @@ function SFXTable({ items }: { items: SFXItem[] }) {
   );
 }
 
+function RemixIdeasSection({
+  ideas,
+  onUse,
+}: {
+  ideas: RemixIdea[];
+  onUse?: (concept: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!ideas.length) return null;
+  return (
+    <div className="remix-ideas-card">
+      <button className="remix-expand-btn" onClick={() => setExpanded((e) => !e)}>
+        <span>✨ Remix Ideas ({ideas.length})</span>
+        <span className="remix-expand-icon">{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && (
+        <div className="remix-ideas-list">
+          {ideas.map((idea, i) => (
+            <div key={i} className="remix-idea-item">
+              <div className="remix-idea-header">
+                <strong className="remix-idea-title">{idea.title}</strong>
+                {onUse && (
+                  <button className="remix-use-btn" onClick={() => onUse(idea.concept)}>
+                    Use This Concept
+                  </button>
+                )}
+              </div>
+              <p className="remix-idea-concept">{idea.concept}</p>
+              <div className="remix-idea-meta">
+                <span className="element-tag">{idea.style}</span>
+                <span className="element-tag">{idea.mood}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const MAIN_TABS = [
   { id: 'scenes', label: 'Scene Analysis' },
   { id: 'images', label: 'Image Gen' },
   { id: 'videogen', label: 'Video Gen' },
+  { id: 'musicgen', label: 'Music Gen' },
   { id: 'video', label: 'Video Prompts' },
   { id: 'music', label: 'Music Prompts' },
   { id: 'editing', label: 'Editing Guide' },
@@ -283,7 +328,7 @@ const MAIN_TABS = [
 
 type TabId = (typeof MAIN_TABS)[number]['id'];
 
-export default function ResultsTabs({ result, selectedPlatforms }: Props) {
+export default function ResultsTabs({ result, selectedPlatforms, description, onUseRemixIdea }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('scenes');
   const [generatedImages, setGeneratedImages] = useState<Record<number, string>>({});
 
@@ -386,10 +431,15 @@ export default function ResultsTabs({ result, selectedPlatforms }: Props) {
 
       <div className="tab-content">
         {activeTab === 'scenes' && (
-          <div className="scenes-grid">
-            {result.sceneAnalysis.map((scene) => (
-              <SceneCard key={scene.scene} scene={scene} />
-            ))}
+          <div>
+            <div className="scenes-grid">
+              {result.sceneAnalysis.map((scene) => (
+                <SceneCard key={scene.scene} scene={scene} />
+              ))}
+            </div>
+            {result.remixIdeas && result.remixIdeas.length > 0 && (
+              <RemixIdeasSection ideas={result.remixIdeas} onUse={onUseRemixIdea} />
+            )}
           </div>
         )}
 
@@ -405,6 +455,13 @@ export default function ResultsTabs({ result, selectedPlatforms }: Props) {
             scenes={result.sceneAnalysis}
             generatedImages={generatedImages}
             onSwitchToImages={() => setActiveTab('images')}
+          />
+        )}
+
+        {activeTab === 'musicgen' && (
+          <MusicGen
+            scenes={result.sceneAnalysis}
+            description={description ?? ''}
           />
         )}
 

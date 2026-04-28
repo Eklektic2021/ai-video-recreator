@@ -2536,3 +2536,214 @@ body.light-mode {
 .light-mode .vidgen-platform-btn { border-color: rgba(0,0,0,0.15); color: #555; }
 .light-mode .vidgen-platform-btn:hover { border-color: #0064dc; color: #0064dc; }
 .light-mode .vidgen-platform-btn--active { background: rgba(0,100,220,0.08); border-color: #0064dc; color: #0064dc; }
+
+/* ── Provider badges ── */
+.vidgen-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+.vidgen-badge--kie    { background: rgba(0,217,255,0.15); color: var(--cyan); }
+.vidgen-badge--fal    { background: rgba(139,92,246,0.18); color: #a78bfa; }
+.vidgen-badge--gemini { background: rgba(59,130,246,0.18); color: #60a5fa; }
+.vidgen-badge--replicate { background: rgba(52,211,153,0.18); color: #34d399; }
+
+/* ── Disabled provider button ── */
+.vidgen-provider-btn--disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.vidgen-provider-btn--disabled:hover { border-color: var(--border); color: var(--text-2); }
+.light-mode .vidgen-provider-btn--disabled:hover { border-color: rgba(0,0,0,0.15); color: #888; }
+
+/* ── Music Gen ── */
+.musicgen-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+.musicgen-header { }
+.musicgen-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 0.2rem;
+}
+.musicgen-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+.musicgen-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.musicgen-row-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 55px;
+}
+.musicgen-pill {
+  padding: 0.22rem 0.8rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.musicgen-pill:hover { border-color: var(--cyan); color: var(--cyan); }
+.musicgen-pill--active {
+  background: rgba(0,217,255,0.12);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+.musicgen-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  margin-left: 0.4rem;
+}
+.musicgen-toggle-wrap input[type="checkbox"] { accent-color: var(--cyan); cursor: pointer; }
+.musicgen-toggle-label { font-size: 0.78rem; color: var(--text-2); }
+.musicgen-prompt-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.musicgen-textarea {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.18s;
+}
+.musicgen-textarea:focus { outline: none; border-color: var(--border-active); }
+.musicgen-actions { display: flex; }
+.musicgen-generate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.musicgen-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+}
+.musicgen-player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.musicgen-audio {
+  width: 100%;
+  accent-color: var(--cyan);
+}
+.light-mode .musicgen-title { color: #1a1a2e; }
+.light-mode .musicgen-subtitle { color: #555; }
+.light-mode .musicgen-row-label { color: #555; }
+.light-mode .musicgen-pill { border-color: rgba(0,0,0,0.15); color: #555; }
+.light-mode .musicgen-pill:hover { border-color: #0064dc; color: #0064dc; }
+.light-mode .musicgen-pill--active { background: rgba(0,100,220,0.08); border-color: #0064dc; color: #0064dc; }
+.light-mode .musicgen-toggle-label { color: #555; }
+.light-mode .musicgen-textarea { background: #fff; border-color: rgba(0,0,0,0.15); color: #1a1a2e; }
+.light-mode .musicgen-player { background: #f8faff; border-color: rgba(0,0,0,0.1); }
+
+/* ── Remix Ideas ── */
+.remix-ideas-card {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.remix-expand-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--bg-input);
+  border: none;
+  color: var(--text-1);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.remix-expand-btn:hover { background: var(--bg-hover); }
+.remix-expand-icon { color: var(--text-2); font-size: 0.72rem; }
+.remix-ideas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.remix-idea-item {
+  padding: 0.9rem 1rem;
+  border-top: 1px solid var(--border);
+}
+.remix-idea-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+.remix-idea-title {
+  font-size: 0.88rem;
+  color: var(--text-1);
+}
+.remix-use-btn {
+  padding: 0.2rem 0.65rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-active);
+  background: rgba(0,217,255,0.06);
+  color: var(--cyan);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.remix-use-btn:hover { background: rgba(0,217,255,0.15); border-color: var(--cyan); }
+.remix-idea-concept {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin-bottom: 0.45rem;
+}
+.remix-idea-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.light-mode .remix-ideas-card { border-color: rgba(0,0,0,0.1); }
+.light-mode .remix-expand-btn { background: #f5f7ff; color: #1a1a2e; }
+.light-mode .remix-expand-btn:hover { background: #eef1ff; }
+.light-mode .remix-expand-icon { color: #888; }
+.light-mode .remix-idea-item { border-top-color: rgba(0,0,0,0.08); }
+.light-mode .remix-idea-title { color: #1a1a2e; }
+.light-mode .remix-idea-concept { color: #555; }
+.light-mode .remix-use-btn { border-color: #0064dc; background: rgba(0,100,220,0.05); color: #0064dc; }
+.light-mode .remix-use-btn:hover { background: rgba(0,100,220,0.12); }

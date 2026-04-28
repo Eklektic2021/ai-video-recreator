@@ -288,7 +288,12 @@ export default function App() {
           </div>
 
           {result && (
-            <ResultsTabs result={result} selectedPlatforms={platforms} />
+            <ResultsTabs
+              result={result}
+              selectedPlatforms={platforms}
+              description={description}
+              onUseRemixIdea={(concept) => setDescription(concept)}
+            />
           )}
         </main>
 
