@@ -7,6 +7,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 
+// ── Temporary image store ─────────────────────────────────────────────────────
+// Replicate requires publicly accessible URLs — we store base64 images here
+// briefly so Replicate can fetch them, then expire them after 10 minutes.
+const tempImages = new Map<string, { data: Buffer; mime: string; expiry: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of tempImages) if (v.expiry < now) tempImages.delete(k);
+}, 5 * 60 * 1000).unref();
+
+app.get('/api/temp-image/:id', (req, res) => {
+  const entry = tempImages.get(req.params.id);
+  if (!entry || entry.expiry < Date.now()) { res.status(404).end(); return; }
+  res.setHeader('Content-Type', entry.mime);
+  res.setHeader('Cache-Control', 'public, max-age=600');
+  res.send(entry.data);
+});
+
 // ── Shared helpers ─────────────────────────────────────────────────────────────
 
 async function pollUntilDone(
@@ -305,7 +322,25 @@ app.post('/api/replicate', async (req, res) => {
   const modelUrl = useRedux
     ? 'https://api.replicate.com/v1/models/black-forest-labs/flux-redux-dev/predictions'
     : 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions';
-  const input = useRedux ? { redux_image: referenceImageBase64, prompt } : { prompt };
+
+  // Replicate requires a public URL — store the base64 image server-side and
+  // build a URL that Replicate can fetch back from us.
+  let input: Record<string, unknown>;
+  if (useRedux && referenceImageBase64) {
+    const match = referenceImageBase64.match(/^data:([^;,]+);base64,(.+)$/s);
+    const mime = match?.[1] ?? 'image/png';
+    const b64 = match?.[2] ?? referenceImageBase64;
+    const buf = Buffer.from(b64, 'base64');
+    const id = randomBytes(16).toString('hex');
+    tempImages.set(id, { data: buf, mime, expiry: Date.now() + 10 * 60 * 1000 });
+    const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() ?? req.protocol;
+    const host = req.headers.host ?? 'localhost:3001';
+    const publicUrl = `${proto}://${host}/api/temp-image/${id}`;
+    console.log(`[Replicate/FLUX-Redux] stored temp image id=${id} mime=${mime} size=${buf.length} publicUrl=${publicUrl}`);
+    input = { redux_image: publicUrl, prompt };
+  } else {
+    input = { prompt };
+  }
 
   try {
     const createRes = await fetch(modelUrl, {
