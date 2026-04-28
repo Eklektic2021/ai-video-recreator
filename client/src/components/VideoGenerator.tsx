@@ -24,6 +24,7 @@ type Provider =
   | 'runway-aleph'
   | 'kling-2'
   | 'kling-3-audio'
+  | 'kling-3-fal'
   | 'veo-fast'
   | 'veo-full'
   | 'veo-direct'
@@ -68,10 +69,19 @@ const PROVIDER_DEFS: ProviderDef[] = [
   {
     id: 'kling-3-audio',
     label: 'Kling 3.0 🎙️',
-    getBadge: (fal, _r, kling) => (kling ? 'Kling' : fal ? 'fal.ai' : 'KIE'),
-    isAvailable: (kie, fal, _g, _r, kling) => !!(kie || fal || kling),
+    getBadge: (_f, _r, kling) => (kling ? 'Kling' : 'KIE'),
+    isAvailable: (kie, _f, _g, _r, kling) => !!(kie || kling),
     durations: [5, 10],
-    noKeyMsg: 'Add your Kling AI, KIE AI, or fal.ai API key to use Kling 3.0',
+    noKeyMsg: 'Add your Kling AI or KIE AI API key to use Kling 3.0',
+  },
+  {
+    id: 'kling-3-fal',
+    label: 'Kling 3.0 🎙️',
+    getBadge: () => 'fal.ai',
+    isAvailable: (_kie, fal) => !!fal,
+    hideIfNoKey: true,
+    durations: [5, 10],
+    noKeyMsg: 'Add your fal.ai API key to use Kling 3.0 via fal.ai',
   },
   {
     id: 'veo-fast',
@@ -169,7 +179,7 @@ async function downloadMedia(url: string, sceneNum: number, isImage: boolean) {
   }
 }
 
-const AUDIO_CAPABLE: Provider[] = ['kling-3-audio', 'veo-full', 'veo-direct'];
+const AUDIO_CAPABLE: Provider[] = ['kling-3-audio', 'kling-3-fal', 'veo-full', 'veo-direct'];
 
 interface Props {
   scenes: SceneAnalysis[];
@@ -250,9 +260,10 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
         case 'kling-3-audio':
           url = klingFlag
             ? await generateWithKling3AudioNative(imageSource, prompt, klingAccessKey, klingSecretKey, duration, aspectRatio)
-            : falKey
-            ? await generateWithKling3AudioFal(imageSource, prompt, falKey, duration, aspectRatio)
             : await generateWithKling3AudioKie(imageSource, prompt, kieKey, duration, aspectRatio);
+          break;
+        case 'kling-3-fal':
+          url = await generateWithKling3AudioFal(imageSource, prompt, falKey, duration, aspectRatio);
           break;
         case 'veo-fast':
           url = await generateWithVeoFast(imageSource, prompt, kieKey, aspectRatio);
