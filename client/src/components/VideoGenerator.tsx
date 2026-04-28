@@ -446,7 +446,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
             needsAudio && !AUDIO_CAPABLE.includes(provider) && kieKey ? 'veo-full' : provider;
           const effectiveDef = PROVIDER_DEFS.find((d) => d.id === effectiveProvider)!;
           const effectiveDuration = effectiveDef.fixedDuration ?? duration;
-          const canGenerate = !!imageUrl && effectiveDef.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingKey);
+          const canGenerate = !!imageUrl && effectiveDef.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag);
 
           return (
             <div key={scene.scene} className="vidgen-scene-card">
