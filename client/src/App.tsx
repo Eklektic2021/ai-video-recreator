@@ -96,6 +96,10 @@ export default function App() {
     setError(null);
     setResult(null);
 
+    console.log('[handleAnalyze] Starting analysis pipeline');
+    console.log('[handleAnalyze] Video file:', videoFile?.name, '|', videoFile ? `${(videoFile.size / 1024 / 1024).toFixed(2)} MB` : 'none');
+    console.log('[handleAnalyze] Description length:', description.length);
+
     let msgIdx = 0;
     setLoadingMessage(rotatingMessages[msgIdx]);
     const msgInterval = setInterval(() => {
@@ -104,19 +108,32 @@ export default function App() {
     }, 3000);
 
     try {
+      console.log('[handleAnalyze] Calling runAnalysis...');
       const data = await runAnalysis(apiKey, description, platforms);
+      console.log('[handleAnalyze] runAnalysis succeeded — scenes:', data.sceneAnalysis.length);
+
+      if (!data.sceneAnalysis || data.sceneAnalysis.length === 0) {
+        console.warn('[handleAnalyze] Analysis returned 0 scenes — response may be incomplete');
+        setError('Analysis returned no scenes. The response may have been cut off — try again or shorten your description.');
+        return;
+      }
+
       setResult(data);
+
       const uid = auth.currentUser?.uid;
       if (uid) {
         saveProject(uid, { title: description, platforms, output: data }).catch(
-          (e) => console.warn('Failed to save project:', e)
+          (e) => console.warn('[handleAnalyze] Failed to save project:', e)
         );
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+      console.error('[handleAnalyze] Analysis failed:', err);
+      const msg = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setError(msg);
     } finally {
       clearInterval(msgInterval);
       setLoading(false);
+      console.log('[handleAnalyze] Pipeline finished (loading cleared)');
     }
   };
 

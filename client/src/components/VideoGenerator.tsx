@@ -195,6 +195,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
   const [forceAudio, setForceAudio] = useState<Record<number, boolean>>({});
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [platform, setPlatform] = useState<Platform | null>(null);
+  const [videoReady, setVideoReady] = useState<Record<number, boolean>>({});
 
   const kieKey = getStoredKieKey();
   const falKey = getStoredFalKey();
@@ -246,6 +247,7 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
     if (!def.isAvailable(kieKey, falKey, geminiKey, videoReplicateKey, klingFlag)) return;
 
     setVideoState(scene.scene, { loading: true, error: null, url: null, isImage: false });
+    setVideoReady((prev) => ({ ...prev, [scene.scene]: false }));
     try {
       let url: string;
       switch (effectiveProvider) {
@@ -535,7 +537,24 @@ export default function VideoGenerator({ scenes, generatedImages, onSwitchToImag
                           style={{ objectFit: 'contain' }}
                         />
                       ) : (
-                        <video src={mediaUrl} controls className="vidgen-video" preload="metadata" />
+                        <div className="vidgen-video-wrap">
+                          {!videoReady[scene.scene] && (
+                            <div className="vidgen-video-loading">
+                              <div className="spinner" />
+                              <span>Loading video…</span>
+                            </div>
+                          )}
+                          <video
+                            src={mediaUrl}
+                            controls
+                            className="vidgen-video"
+                            preload="metadata"
+                            style={{ opacity: videoReady[scene.scene] ? 1 : 0 }}
+                            onLoadedData={() => setVideoReady((prev) => ({ ...prev, [scene.scene]: true }))}
+                            onCanPlay={() => setVideoReady((prev) => ({ ...prev, [scene.scene]: true }))}
+                            onError={() => setVideoReady((prev) => ({ ...prev, [scene.scene]: true }))}
+                          />
+                        </div>
                       )}
                       <div className="vidgen-video-actions">
                         <button
